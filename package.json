@@ -1,0 +1,27 @@
+{
+  "name": "monorepo-ektm",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "check": "turbo run check",
+    "clean": "turbo run clean",
+    "db:generate": "turbo run db:generate",
+    "db:push": "turbo run db:push",
+    "db:migrate": "turbo run db:migrate",
+    "migrate:guide": "type MIGRATION_GUIDE.md",
+    "migrate:checklist": "type MIGRATION_CHECKLIST.md",
+    "migrate:script": "powershell -ExecutionPolicy Bypass -File ./scripts/migrate-to-monorepo.ps1"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.0"
+}

@@ -1,0 +1,6 @@
+packages:
+  # Semua aplikasi
+  - "apps/*"
+  - "apps/*/*"
+  # Semua shared packages
+  - "packages/*"
