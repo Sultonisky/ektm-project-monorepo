@@ -397,14 +397,3 @@
   message={alertMessage}
   on:hide={hideAlert}
 />
-
-<style>
-  .item-avatar img,
-  .data-table td img {
-    width: 60px;
-    height: 60px;
-    object-fit: cover;
-    border-radius: 10px;
-    display: block;
-  }
-</style>

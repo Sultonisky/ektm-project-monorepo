@@ -53,7 +53,6 @@ export interface MidtransResponse {
 export class MidtransService {
   private readonly logger = new Logger(MidtransService.name);
   private coreApi: midtransClient.CoreApi;
-  private snap: midtransClient.Snap;
 
   constructor(private readonly configService: ConfigService) {
     const serverKey = this.configService.get<string>('MIDTRANS_SERVER_KEY');
@@ -64,23 +63,25 @@ export class MidtransService {
       throw new Error('Midtrans server key and client key must be configured');
     }
 
-    // Initialize Core API
+    // Initialize Core API only
     this.coreApi = new midtransClient.CoreApi({
       isProduction,
       serverKey,
       clientKey,
     });
 
-    // Initialize Snap
-    this.snap = new midtransClient.Snap({
-      isProduction,
-      serverKey,
-      clientKey,
-    });
-
-    this.logger.log(`Midtrans initialized - Production: ${isProduction}`);
+    this.logger.log(`Midtrans Core API initialized - Production: ${isProduction}`);
   }
 
+  /**
+   * Create transaction using Midtrans Core API
+   * This uses Core API directly (not Snap) so FE/mobile can build custom payment UI
+   * 
+   * Response includes:
+   * - For bank_transfer: va_numbers (VA number and bank name)
+   * - For echannel: bill_key and biller_code (for Mandiri Bill Payment)
+   * - For credit_card: actions with redirect_url (for 3DS authentication)
+   */
   async createTransaction(request: MidtransChargeRequest): Promise<MidtransResponse> {
     try {
       this.logger.log(`Creating Midtrans transaction for order: ${request.transaction_details.order_id}`);
@@ -119,20 +120,6 @@ export class MidtransService {
       return response as MidtransResponse;
     } catch (error) {
       this.logger.error(`Failed to cancel transaction: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async createSnapTransaction(request: MidtransChargeRequest): Promise<{ token: string; redirect_url: string }> {
-    try {
-      this.logger.log(`Creating Snap transaction for order: ${request.transaction_details.order_id}`);
-      
-      const response = await this.snap.createTransaction(request);
-      
-      this.logger.log(`Snap transaction created with token: ${response.token}`);
-      return response;
-    } catch (error) {
-      this.logger.error(`Failed to create Snap transaction: ${error.message}`);
       throw error;
     }
   }

@@ -20,6 +20,7 @@ export class PaymentService {
       ...payment,
       id: payment.id.toString(),
       mahasiswaId: payment.mahasiswaId.toString(),
+      paymentCode: payment.paymentCode,
       // Ensure decimals are strings
       biayaPokok: payment.biayaPokok?.toString(),
       biayaTambahanJurusan: payment.biayaTambahanJurusan?.toString(),
@@ -27,13 +28,18 @@ export class PaymentService {
       biayaUjian: payment.biayaUjian?.toString(),
       biayaKegiatan: payment.biayaKegiatan?.toString(),
       totalPayment: payment.totalPayment?.toString(),
+      paymentMethod: payment.paymentMethod,
+      status: payment.status,
       // Midtrans fields
       midtransOrderId: payment.midtransOrderId,
       midtransTransactionId: payment.midtransTransactionId,
       midtransPaymentUrl: payment.midtransPaymentUrl,
       midtransVaNumber: payment.midtransVaNumber,
+      midtransVaBank: payment.midtransVaBank,
       midtransBillKey: payment.midtransBillKey,
       midtransBillerCode: payment.midtransBillerCode,
+      createdAt: payment.createdAt,
+      updatedAt: payment.updatedAt,
     } as PaymentResponseDto;
   }
 
@@ -163,7 +169,16 @@ export class PaymentService {
         );
       }
       
-      return this.toResponse(created);
+      // Return response with complete Midtrans information for FE/mobile
+      const response = this.toResponse(created);
+      // Add complete Midtrans response data for FE/mobile to build custom payment UI
+      response.midtransTransactionStatus = midtransResponse.transaction_status;
+      response.midtransPaymentType = midtransResponse.payment_type;
+      response.midtransPaymentUrl = midtransResponse.actions?.[0]?.url;
+      response.midtransVaBank = midtransResponse.va_numbers?.[0]?.bank;
+      response.midtransActions = midtransResponse.actions;
+      
+      return response;
 
     } catch (error) {
       this.logger.error(`Failed to create Midtrans transaction: ${error.message}`, 'PaymentService');

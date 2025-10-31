@@ -180,8 +180,10 @@
 
 .item-info { display: flex; align-items: center; gap: 12px; }
 .item-info-content { display: flex; flex-direction: column; gap: 4px; }
-.item-avatar { width: 36px; height: 36px; background: linear-gradient(135deg, #1E69DD, #57D4D4); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px; }
+.item-avatar { width: 32px; height: 32px; background: linear-gradient(135deg, #1E69DD, #57D4D4); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 12px; }
+.item-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .item-name { font-weight: 500; color: #374151; }
+.data-table td img { width: 60px; height: 60px; object-fit: cover; border-radius: 10px; display: block; }
 
 /* Badges */
 .role-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; }

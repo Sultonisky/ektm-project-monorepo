@@ -4,10 +4,11 @@
   import { page } from '$app/stores';
   import { authAPI } from '$lib/api';
   import logoEktm from '$lib/assets/images/logo/logo.png';
+  import profileAdmin from '$lib/assets/images/profile/admin.jpeg';
   import { Icon, ICON_NAMES } from '$lib/components/icons';
 
   let sidebarOpen = $state(true);
-  let user = authAPI.getCurrentUser() || { name: 'Admin User', email: 'admin@example.com' };
+  let user = authAPI.getCurrentUser() || { name: 'Admin User', email: 'admin@example.com', role: 'Administrator' };
 
   // Navigation items with dropdown support
   const navItems = [
@@ -273,11 +274,11 @@
         <div class="user-menu">
           <div class="user-info">
             <div class="user-avatar">
-              <span>{user.name.split(' ').map(n => n[0]).join('')}</span>
+              <img src={profileAdmin} alt={user.name} />
             </div>
             <div class="user-details">
               <span class="user-name">{user.name}</span>
-              <span class="user-role">Administrator</span>
+              <span class="user-role">{user.role}</span>
             </div>
           </div>
           <button class="logout-btn" onclick={logout}>
@@ -872,5 +873,12 @@
     font-size: 24px;
     font-weight: 700;
     color: #1E69DD;
+  }
+
+  .user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
   }
 </style> 

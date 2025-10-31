@@ -22,13 +22,21 @@ export class PaymentResponseDto {
   paymentMethod: PaymentMethodDto;
   status: PaymentStatusDto;
   
-  // Midtrans fields
+  // Midtrans fields - complete payment information for FE/mobile
   midtransOrderId?: string;
   midtransTransactionId?: string;
-  midtransPaymentUrl?: string;
+  midtransTransactionStatus?: string;
+  midtransPaymentType?: string;
+  midtransPaymentUrl?: string; // For credit card redirect
   midtransVaNumber?: string;
+  midtransVaBank?: string; // Bank name for VA (BCA, BNI, etc)
   midtransBillKey?: string;
   midtransBillerCode?: string;
+  midtransActions?: Array<{
+    name: string;
+    method: string;
+    url: string;
+  }>;
   
   createdAt: Date;
   updatedAt: Date;
