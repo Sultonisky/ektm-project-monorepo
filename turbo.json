@@ -4,11 +4,21 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "build/**", ".svelte-kit/**"]
+      "outputs": ["dist/**", ".next/**", "build/**", ".svelte-kit/**", "android/app/build/**", "ios/build/**"]
     },
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "start": {
+      "cache": false,
+      "persistent": true
+    },
+    "android": {
+      "cache": false
+    },
+    "ios": {
+      "cache": false
     },
     "lint": {
       "dependsOn": ["^lint"]
