@@ -7,10 +7,12 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft, Files, IdCard } from 'lucide-react-native';
+import { paymentService } from '../../../services/api';
 import { bankImages } from '../../../constants/bank';
 // Clipboard optional dependency; fallback to no-op in dev
 let Clipboard: { setString: (text: string) => void } = { setString: () => {} };
@@ -19,6 +21,8 @@ try {
   Clipboard = require('@react-native-clipboard/clipboard').default;
 } catch {}
 
+type MidtransAction = { name: string; method: string; url: string };
+
 type RouteParams = {
   invoiceId?: string; // VA number
   bankKey?: 'bca' | 'bni' | 'bri' | 'bsi' | 'cimb' | 'mandiri' | 'permata';
@@ -26,6 +30,19 @@ type RouteParams = {
   nim?: string;
   rincian?: { label: string; value: string }[];
   total?: string;
+  paymentId?: string;
+  paymentCode?: string;
+  status?: string;
+  midtransPaymentUrl?: string;
+  midtransActions?: MidtransAction[];
+  midtransBillKey?: string;
+  midtransBillerCode?: string;
+};
+
+const statusMeta: Record<string, { label: string; background: string; color: string }> = {
+  lunas: { label: 'Lunas', background: 'rgba(40, 167, 69, 0.15)', color: '#28A745' },
+  pending: { label: 'Menunggu', background: 'rgba(255, 193, 7, 0.15)', color: '#FFC107' },
+  belum: { label: 'Belum Bayar', background: 'rgba(220, 53, 69, 0.12)', color: '#DC3545' },
 };
 
 // bankImages now shared from constants
@@ -35,10 +52,16 @@ export default function MenungguPembayaranScreen() {
   const route = useRoute<any>();
   const params: RouteParams = route?.params ?? {};
 
+  const [bankKey, setBankKey] = useState<RouteParams['bankKey']>(params?.bankKey ?? 'bca');
+  const [currentVaNumber, setCurrentVaNumber] = useState(params?.invoiceId ?? '1234567890954322376');
+  const [currentStatus, setCurrentStatus] = useState<string>((params?.status ?? 'pending').toLowerCase());
+  const [paymentUrl, setPaymentUrl] = useState<string | undefined>(
+    () => params?.midtransPaymentUrl || params?.midtransActions?.find(action => action.url)?.url,
+  );
+  const [pollError, setPollError] = useState<string | null>(null);
+
   const name = params?.nama ?? 'Nihat Hasannanto';
   const nim = params?.nim ?? '19230211';
-  const bankKey = params?.bankKey ?? 'bca';
-  const vaNumber = params?.invoiceId ?? '1234567890954322376';
   const rincian =
     params?.rincian ?? [
       { label: 'Biaya kuliah pokok', value: 'Rp2.580.000' },
@@ -48,6 +71,14 @@ export default function MenungguPembayaranScreen() {
       { label: 'Biaya kegiatan mahasiswa', value: 'Rp400.000' },
     ];
   const total = params?.total ?? 'Rp3.280.000';
+
+  const statusInfo = statusMeta[currentStatus] ?? statusMeta.pending;
+
+  const normalizeBankKey = (value?: string | null) => {
+    if (!value) return undefined;
+    const key = value.toLowerCase() as keyof typeof bankImages;
+    return bankImages[key] ? key : undefined;
+  };
 
   // Success toast animation (fadeInDown then fadeOut)
   const toastOpacity = useRef(new Animated.Value(0)).current;
@@ -91,8 +122,18 @@ export default function MenungguPembayaranScreen() {
   };
 
   const copyVA = () => {
-    Clipboard.setString(vaNumber);
+    Clipboard.setString(currentVaNumber);
     showToast();
+  };
+
+  const handleOpenPaymentLink = async () => {
+    if (!paymentUrl) return;
+    try {
+      await Linking.openURL(paymentUrl);
+      setPollError(null);
+    } catch (error) {
+      setPollError('Tidak dapat membuka tautan pembayaran.');
+    }
   };
 
   const handleBackPress = () => {
@@ -102,6 +143,67 @@ export default function MenungguPembayaranScreen() {
   const handleBackToHome = () => {
     navigation.navigate('Main', { initialTab: 'ektm' });
   };
+
+  useEffect(() => {
+    if (!params?.paymentId) return undefined;
+
+    let isMounted = true;
+    let interval: ReturnType<typeof setInterval>;
+
+    const fetchStatus = async () => {
+      try {
+        const payment = await paymentService.getPaymentById(params.paymentId!);
+        if (!isMounted) return;
+
+        const normalizedStatus = (payment.status ?? '').toLowerCase();
+        setCurrentStatus(normalizedStatus);
+
+        const updatedVa = payment.midtransVaNumber || payment.midtransBillKey;
+        if (updatedVa) {
+          setCurrentVaNumber(updatedVa);
+        }
+
+        const updatedBankKey = normalizeBankKey(payment.midtransVaBank);
+        if (updatedBankKey) {
+          setBankKey(updatedBankKey);
+        }
+
+        const actionUrl = payment.midtransActions?.find(item => item.url)?.url;
+        if (payment.midtransPaymentUrl) {
+          setPaymentUrl(payment.midtransPaymentUrl);
+        } else if (actionUrl) {
+          setPaymentUrl(actionUrl);
+        }
+
+        setPollError(null);
+
+        if (normalizedStatus === 'lunas') {
+          const successInvoice = updatedVa || payment.midtransBillKey || params.invoiceId || '1234567890954322376';
+          const successBankKey = updatedBankKey ?? params.bankKey ?? 'bca';
+
+          clearInterval(interval);
+          navigation.replace('PembayaranSukses', {
+            invoiceId: successInvoice,
+            nama: params.nama,
+            nim: params.nim,
+            total: params.total,
+            bankKey: successBankKey,
+          });
+        }
+      } catch (error: any) {
+        if (!isMounted) return;
+        setPollError(error?.message || 'Gagal memeriksa status pembayaran.');
+      }
+    };
+
+    fetchStatus();
+    interval = setInterval(fetchStatus, 8000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [navigation, params?.bankKey, params?.invoiceId, params?.nama, params?.nim, params?.paymentId, params?.total]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -133,11 +235,19 @@ export default function MenungguPembayaranScreen() {
           <Image source={require('@images/frame_wait.png')} style={styles.bannerImage} />
           <Text style={styles.bannerSubtitle}>Virtual Account Number</Text>
           <View style={styles.vaRow}>
-            <Text style={styles.vaNumber}>{vaNumber}</Text>
+            <Text style={styles.vaNumber}>{currentVaNumber}</Text>
             <TouchableOpacity onPress={copyVA} activeOpacity={0.8}>
               <Files size={24} color="#000000" />
             </TouchableOpacity>
           </View>
+          <View style={[styles.statusBadge, { backgroundColor: statusInfo.background }] }>
+            <Text style={[styles.statusBadgeText, { color: statusInfo.color }]}>{statusInfo.label}</Text>
+          </View>
+          {paymentUrl ? (
+            <TouchableOpacity style={styles.paymentLinkButton} onPress={handleOpenPaymentLink} activeOpacity={0.8}>
+              <Text style={styles.paymentLinkText}>Bayar via Midtrans</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* Profile */}
@@ -149,7 +259,7 @@ export default function MenungguPembayaranScreen() {
               <Text style={styles.profileNim}>{nim}</Text>
             </View>
             <View style={styles.bankBadgeWrapper}>
-              <Image source={bankImages[bankKey]} style={styles.bankBadge} />
+              <Image source={bankImages[bankKey ?? 'bca']} style={styles.bankBadge} />
             </View>
           </View>
         </View>
@@ -171,6 +281,8 @@ export default function MenungguPembayaranScreen() {
             <Text style={styles.amountValue}>{total}</Text>
           </View>
         </View>
+
+        {pollError ? <Text style={styles.pollErrorText}>{pollError}</Text> : null}
 
         <View style={{ height: 140 }} />
       </Animated.ScrollView>
@@ -233,6 +345,28 @@ const styles = StyleSheet.create({
   bannerSubtitle: { marginTop: 12, fontSize: 12, color: '#707070', fontFamily: 'Poppins-Medium' },
   vaRow: { marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 10 },
   vaNumber: { fontSize: 20, fontFamily: 'Poppins-Bold', color: '#000000' },
+  statusBadge: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  paymentLinkButton: {
+    marginTop: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#1E69DD',
+  },
+  paymentLinkText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#FFFFFF',
+  },
 
   // Profile card
   profileCard: {
@@ -275,6 +409,14 @@ const styles = StyleSheet.create({
   amountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   amountLabel: { fontSize: 12, fontFamily: 'Poppins-Medium', fontWeight: '500', color: '#707070', lineHeight: 18, flex: 1 },
   amountValue: { fontSize: 16, fontFamily: 'Poppins-SemiBold', fontWeight: '500', color: '#1F1F1F', lineHeight: 24, textAlign: 'center' },
+
+  pollErrorText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
+    color: '#D92121',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
 
   // Footer button
   footerWrapper: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 32, paddingTop: 12, paddingBottom: 24, backgroundColor: 'transparent' },

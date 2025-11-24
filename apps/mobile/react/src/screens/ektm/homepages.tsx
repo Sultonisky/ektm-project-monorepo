@@ -13,58 +13,102 @@ import {
   TextProps,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { MapPin, Bell, CheckCircle, Lightbulb, Camera, User, IdCard, DoorClosed, Phone as PhoneIcon, Mail, Puzzle, GraduationCap, Headset } from 'lucide-react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { MapPin, Bell, Lightbulb, User, IdCard, DoorClosed, Phone as PhoneIcon, Mail, Puzzle, GraduationCap, Headset } from 'lucide-react-native';
+import useAuth from '../../hooks/useAuth';
+import { paymentService } from '../../services/api';
 
 const { width } = Dimensions.get('window');
 
-// Wrapper Text component dengan font Poppins sebagai default
+const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
 const Text = ({ style, ...props }: TextProps) => (
   <RNText style={[{ fontFamily: 'Poppins-Regular' }, style]} {...props} />
 );
 
+type PaymentStatusVariant = 'lunas' | 'pending' | 'belum_lunas';
+
 export default function EKtmScreen() {
   const navigation = useNavigation<any>();
+  const { mahasiswaProfile, user } = useAuth();
   const scrollY = useRef(new Animated.Value(0)).current;
-  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
-  
-  // Student data with payment status - Dummy data, will be replaced with backend API
-  // TODO: Replace with actual backend data using useEffect and API call
-  const [studentData] = useState({
-    name: 'Nihat Hasananto',
-    studentId: '19230759 - 19.4A.26',
-    major: 'S1 • SISTEM INFORMASI',
-    date: 'Maret, 2023',
-    paymentStatus: 'lunas' // 'lunas' | 'pending' | 'belum_lunas'
-  });
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatusVariant>('pending');
 
-  // Student personal and academic data - Dummy data, ready for backend integration
-  const [studentDetail] = useState({
+  const currentDate = new Date();
+  const studentName = mahasiswaProfile?.name || user?.name || 'Mahasiswa UBSI';
+  const firstName = studentName.split(' ')[0] || studentName;
+  const nim = mahasiswaProfile?.nim ? String(mahasiswaProfile.nim) : user?.nim ? String(user.nim) : '-';
+  const kelas = mahasiswaProfile?.kelas || '-';
+  const jurusanName = mahasiswaProfile?.jurusan?.name || 'Program Studi';
+  const fakultasName = mahasiswaProfile?.jurusan?.fakultas?.name || 'Fakultas UBSI';
+  const campusName = mahasiswaProfile?.jurusan?.fakultas?.campus?.name || 'Kampus UBSI';
+  const phone = mahasiswaProfile?.phone || '-';
+  const email = mahasiswaProfile?.email || '-';
+
+  const studentIdLine = kelas !== '-' ? `${nim} - ${kelas}` : nim;
+  const majorLine = jurusanName ? `S1 • ${jurusanName}` : 'Program Studi';
+  const dateLabel = `${monthNames[currentDate.getMonth()]}, ${currentDate.getFullYear()}`;
+
+  const studentDetail = {
     personal: {
-      fullName: 'Nihat Hasananto',
-      nim: '19230759',
-      kelas: '19.4A.26',
-      phone: '087800010001',
-      email: 'nihat12@gmail.com'
+      fullName: studentName,
+      nim,
+      kelas,
+      phone,
+      email,
     },
     academic: {
-      fakultas: 'Fakultas Teknik dan Informatika',
-      jurusan: 'Sistem Informasi',
-      kampus: 'UBSI Slipi'
-    }
-  });
+      fakultas: fakultasName,
+      jurusan: jurusanName,
+      kampus: campusName,
+    },
+  };
 
-  // Function to get card background image based on payment status
+  const mapStatus = (status?: string): PaymentStatusVariant => {
+    const normalized = (status || '').toLowerCase();
+    if (normalized === 'lunas') return 'lunas';
+    if (normalized === 'pending') return 'pending';
+    return 'belum_lunas';
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = true;
+
+      const loadPaymentStatus = async () => {
+        if (!user?.id) return;
+        try {
+          const paymentList = await paymentService.getAllPayments(user.id);
+          if (!isActive) return;
+          if (!paymentList.length) {
+            setPaymentStatus('lunas');
+            return;
+          }
+          const latest = paymentList[0];
+          setPaymentStatus(mapStatus(latest.status));
+        } catch (error) {
+          console.error('Failed to load payment status:', error);
+          if (isActive) setPaymentStatus('pending');
+        }
+      };
+
+      loadPaymentStatus();
+
+      return () => {
+        isActive = false;
+      };
+    }, [user?.id]),
+  );
+
   const getCardImage = () => {
-    switch(studentData.paymentStatus) {
+    switch (paymentStatus) {
       case 'lunas':
         return require('@images/card_lunas.png');
       case 'pending':
         return require('@images/card_pending.png');
       case 'belum_lunas':
-        return require('@images/card_belum_lunas.png');
       default:
-        return require('@images/card.png');
+        return require('@images/card_belum_lunas.png');
     }
   };
 
@@ -80,7 +124,6 @@ export default function EKtmScreen() {
     extrapolate: 'clamp',
   });
 
-  // Animasi untuk gradient background - fade out saat scroll
   const gradientOpacity = scrollY.interpolate({
     inputRange: [0, 200],
     outputRange: [1, 0],
@@ -91,11 +134,7 @@ export default function EKtmScreen() {
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
     {
       useNativeDriver: true,
-      listener: (event: any) => {
-        const offsetY = event.nativeEvent.contentOffset.y;
-        setIsHeaderVisible(offsetY < 50);
-      },
-    }
+    },
   );
 
   return (
@@ -108,7 +147,7 @@ export default function EKtmScreen() {
           styles.gradientContainer,
           {
             opacity: gradientOpacity,
-          }
+          },
         ]}
       >
         {/* Background Biru untuk bagian atas */}
@@ -124,20 +163,20 @@ export default function EKtmScreen() {
           {
             transform: [{ translateY: headerTranslateY }],
             opacity: headerOpacity,
-          }
+          },
         ]}
       >
         {/* Welcome message container */}
         <View style={styles.welcomeContainer}>
           <Text style={styles.welcome}>
-            Welcome Back, <Text style={styles.welcomeName}>Nihat</Text>👋
+            Welcome Back, <Text style={styles.welcomeName}>{firstName}</Text>👋
           </Text>
           <View style={styles.locationContainer}>
-            <Image 
-              source={require('@icons/mdi_location.png')} 
+            <Image
+              source={require('@icons/mdi_location.png')}
               style={styles.locationIcon}
             />
-            <Text style={styles.location}>UBSI Slipi, Jakarta Barat</Text>
+            <Text style={styles.location}>{campusName}</Text>
           </View>
         </View>
 
@@ -151,9 +190,9 @@ export default function EKtmScreen() {
             }}
             style={styles.iconBtn}
           >
-            <Headset  color="#1E69DD" size={24} />
+            <Headset color="#1E69DD" size={24} />
           </TouchableOpacity>
-          
+
           <TouchableOpacity onPress={() => {}} style={styles.notificationBtn}>
             <Bell color="#1E69DD" size={20} />
             <View style={styles.notificationBadge} />
@@ -171,30 +210,28 @@ export default function EKtmScreen() {
 
         {/* e-KTM Card */}
         <View style={styles.card}>
-          <Image 
-            source={getCardImage()} 
+          <Image
+            source={getCardImage()}
             style={styles.cardBackground}
             resizeMode="cover"
           />
           <View style={styles.cardContent}>
             {/* Name - Position: left: 16px, top: 32px */}
             <Text style={[styles.cardName, styles.cardNamePosition]}>
-              {studentData.name}
+              {studentName}
             </Text>
             
             {/* ID Numbers - Position: left: 16px, top: 70px */}
             <Text style={[styles.cardSub, styles.cardSubPosition]}>
-              {studentData.studentId}
+              {studentIdLine}
             </Text>
-            
-            {/* Major/Program - Position: left: 16px, top: 143px */}
             <Text style={[styles.cardMajor, styles.cardMajorPosition]}>
-              {studentData.major}
+              {majorLine}
             </Text>
             
             {/* Date - Position: left: 280px, top: 146px */}
             <Text style={[styles.cardDate, styles.cardDatePosition]}>
-              {studentData.date}
+              {dateLabel}
             </Text>
           </View>
         </View>
@@ -209,8 +246,8 @@ export default function EKtmScreen() {
         <View style={{ height: 15 }} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.carouselCardContainer}>
-            <Image 
-              source={require('@images/Rectangle.png')} 
+            <Image
+              source={require('@images/Rectangle.png')}
               style={styles.carouselCardBackground}
               resizeMode="cover"
             />
@@ -220,9 +257,9 @@ export default function EKtmScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Lightbulb color="#FFD600" size={14} />
                   <View style={{ width: 6 }} />
-                  <Text style={styles.carouselChipText}>Semester 4</Text>
+                  <Text style={styles.carouselChipText}>{studentDetail.academic.jurusan}</Text>
                 </View>
-                <View style={styles.carouselChipBlue}><Text style={styles.carouselChipBlueText}>6 Hari</Text></View>
+                <View style={styles.carouselChipBlue}><Text style={styles.carouselChipBlueText}>Aktif</Text></View>
               </View>
             </View>
           </View>
@@ -230,8 +267,8 @@ export default function EKtmScreen() {
           <View style={{ width: 10 }} />
 
           <View style={styles.carouselCardContainer}>
-            <Image 
-              source={require('@images/Rectangle2.png')} 
+            <Image
+              source={require('@images/Rectangle2.png')}
               style={styles.carouselCardBackground}
               resizeMode="cover"
             />
@@ -243,7 +280,7 @@ export default function EKtmScreen() {
                   <View style={{ width: 6 }} />
                   <Text style={styles.carouselChipText}>Universitas BSI</Text>
                 </View>
-                <View style={styles.carouselChipCyan}><Text style={styles.carouselChipBlueText}>6 Hari</Text></View>
+                <View style={styles.carouselChipCyan}><Text style={styles.carouselChipBlueText}>Terbaru</Text></View>
               </View>
             </View>
           </View>
@@ -303,7 +340,7 @@ function renderInfoRow(icon: React.ReactNode, label: string, value: string) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F0F0F0' },
-  
+
   // Gradient Background Styles
   gradientContainer: {
     position: 'absolute',
@@ -348,7 +385,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
   },
-  
+
   // AppBar styles - Clean and refined layout
   appbar: {
     position: 'absolute',
@@ -363,7 +400,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
-  
+
   // Welcome message container
   welcomeContainer: {
     flexDirection: 'column',
@@ -371,7 +408,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flex: 1,
   },
-  
+
   welcome: {
     fontSize: 16,
     color: '#000',
@@ -383,7 +420,7 @@ const styles = StyleSheet.create({
     color: '#1E69DD',
     fontFamily: 'Poppins-Bold',
   },
-  
+
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -399,14 +436,14 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     fontFamily: 'Poppins-SemiBold',
   },
-  
+
   // Notification and customer service icons
   iconsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
   },
-  
+
   iconBtn: {
     width: 58,
     height: 58,
@@ -415,7 +452,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     backgroundColor: '#FFFFFF',
   },
-  
+
   notificationBtn: {
     width: 58,
     height: 58,
@@ -425,7 +462,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     backgroundColor: '#FFFFFF',
   },
-  
+
   notificationBadge: {
     position: 'absolute',
     width: 8,
@@ -438,10 +475,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     zIndex: 1,
   },
-  
-  scrollContent: { 
-    paddingHorizontal: 20, 
-    paddingBottom: 90, 
+
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 90,
     paddingTop: 75,
     backgroundColor: 'transparent',
     zIndex: 1,
@@ -487,10 +524,10 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontFamily: 'Poppins-Bold', color: '#000' },
   sectionSubtitle: { fontSize: 14, fontFamily: 'Poppins-Bold', color: '#000' },
 
-  carouselCardContainer: { 
-    width: 212, 
-    height: 85, 
-    borderRadius: 12, 
+  carouselCardContainer: {
+    width: 212,
+    height: 85,
+    borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
   },

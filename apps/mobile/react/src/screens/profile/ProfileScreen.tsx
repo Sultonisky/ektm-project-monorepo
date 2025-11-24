@@ -23,6 +23,7 @@ import {
   Pencil,
   ChevronRight,
 } from 'lucide-react-native';
+import useAuth from '../../hooks/useAuth';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -33,8 +34,18 @@ const TextComponent = ({ style, ...props }: TextProps) => (
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
+  const { mahasiswaProfile, user, logout } = useAuth();
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
   const scrollY = useRef(new Animated.Value(0)).current;
+
+  const profileName = mahasiswaProfile?.name || user?.name || 'Mahasiswa UBSI';
+  const profileNim = mahasiswaProfile?.nim ? String(mahasiswaProfile.nim) : user?.nim ? String(user.nim) : '-';
+  const profileEmail = mahasiswaProfile?.email || user?.email || '-';
+  const profilePhone = mahasiswaProfile?.phone || '-';
+  const kelas = mahasiswaProfile?.kelas || '-';
+  const fakultas = mahasiswaProfile?.jurusan?.fakultas?.name || 'Fakultas UBSI';
+  const jurusan = mahasiswaProfile?.jurusan?.name || 'Program Studi';
+  const kampus = mahasiswaProfile?.jurusan?.fakultas?.campus?.name || 'Kampus UBSI';
 
   const handleEditPress = () => {
     // Handle edit profile action
@@ -46,7 +57,7 @@ export default function ProfileScreen() {
     // Handle theme change
   };
 
-  const handleMenuPress = (menu: string) => {
+  const handleMenuPress = async (menu: string) => {
     switch (menu) {
       case 'kampus':
         navigation.navigate('KampusUBSI');
@@ -60,8 +71,7 @@ export default function ProfileScreen() {
         navigation.navigate('Tentang');
         break;
       case 'logout':
-        // Handle logout
-        console.log('Logout');
+        await logout();
         break;
       default:
         break;
@@ -126,10 +136,13 @@ export default function ProfileScreen() {
             {/* Name and NIM */}
             <View style={styles.profileInfo}>
               <TextComponent style={styles.profileName}>
-                Nihat Hasannanto
+                {profileName}
               </TextComponent>
               <TextComponent style={styles.profileNIM}>
-                19230211
+                {profileNim}
+              </TextComponent>
+              <TextComponent style={styles.profileClass}>
+                {kelas}
               </TextComponent>
               
               {/* Edit Button - moved here below Name and NIM */}
@@ -191,6 +204,38 @@ export default function ProfileScreen() {
                 )}
               </View>
             </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Informasi Akun Section */}
+        <View style={styles.section}>
+          <TextComponent style={styles.sectionTitle}>Informasi Akun</TextComponent>
+
+          <View style={styles.infoCard}>
+            <View style={styles.infoRow}>
+              <TextComponent style={styles.infoLabel}>Email</TextComponent>
+              <TextComponent style={styles.infoValue}>{profileEmail}</TextComponent>
+            </View>
+            <View style={styles.separator} />
+            <View style={styles.infoRow}>
+              <TextComponent style={styles.infoLabel}>Nomor Telepon</TextComponent>
+              <TextComponent style={styles.infoValue}>{profilePhone}</TextComponent>
+            </View>
+            <View style={styles.separator} />
+            <View style={styles.infoRow}>
+              <TextComponent style={styles.infoLabel}>Fakultas</TextComponent>
+              <TextComponent style={styles.infoValue}>{fakultas}</TextComponent>
+            </View>
+            <View style={styles.separator} />
+            <View style={styles.infoRow}>
+              <TextComponent style={styles.infoLabel}>Jurusan</TextComponent>
+              <TextComponent style={styles.infoValue}>{jurusan}</TextComponent>
+            </View>
+            <View style={styles.separator} />
+            <View style={styles.infoRow}>
+              <TextComponent style={styles.infoLabel}>Kampus</TextComponent>
+              <TextComponent style={styles.infoValue}>{kampus}</TextComponent>
+            </View>
           </View>
         </View>
 
@@ -369,6 +414,13 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: 12,
   },
+  profileClass: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    lineHeight: 21,
+    color: '#000000',
+    marginBottom: 12,
+  },
   editButton: {
     width: 140.5,
     height: 36,
@@ -446,6 +498,36 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#2728D1',
+  },
+  infoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    lineHeight: 21,
+    color: '#000000',
+  },
+  infoValue: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    lineHeight: 21,
+    color: '#000000',
+    textAlign: 'right',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginVertical: 8,
   },
   menuContainer: {
     gap: 0,

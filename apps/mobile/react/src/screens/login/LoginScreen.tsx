@@ -13,18 +13,27 @@ import { ArrowLeft, Eye, EyeOff, ScanFace } from 'lucide-react-native';
 type Props = { 
   onSubmit?: (nim: string, password: string) => void;
   onBack?: () => void;
+  loading?: boolean;
+  errorMessage?: string | null;
 };
 
-export default function LoginScreen({ onSubmit, onBack }: Props) {
+export default function LoginScreen({ onSubmit, onBack, loading = false, errorMessage }: Props) {
   const [nim, setNim] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [secure, setSecure] = React.useState(true);
+
+  const handleLoginPress = () => {
+    if (loading) {
+      return;
+    }
+    onSubmit?.(nim.trim(), password);
+  };
 
   return (
     <SafeAreaView style={styles.root}>
       {/* Navigation Header */}
       <View style={styles.navigationHeader}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
+        <TouchableOpacity style={styles.backButton} onPress={onBack} disabled={loading}>
           <ArrowLeft size={20} color="#000000" />
         </TouchableOpacity>
         <Text style={styles.navigationTitle}>Login</Text>
@@ -53,6 +62,7 @@ export default function LoginScreen({ onSubmit, onBack }: Props) {
             placeholderTextColor="#838383"
             keyboardType="number-pad"
             style={styles.input}
+            editable={!loading}
           />
         </View>
       </View>
@@ -68,23 +78,31 @@ export default function LoginScreen({ onSubmit, onBack }: Props) {
             placeholderTextColor="#838383"
             secureTextEntry={secure}
             style={styles.input}
+            editable={!loading}
           />
-          <TouchableOpacity onPress={() => setSecure(s => !s)} style={styles.eyeIcon}>
+          <TouchableOpacity onPress={() => setSecure(s => !s)} style={styles.eyeIcon} disabled={loading}>
             {secure ? <EyeOff size={16} color="#8C8C8C" /> : <Eye size={16} color="#8C8C8C" />}
           </TouchableOpacity>
         </View>
       </View>
 
+      {/* Error Message */}
+      {errorMessage ? (
+        <Text style={styles.errorText}>{errorMessage}</Text>
+      ) : null}
+
       {/* Login Button */}
       <TouchableOpacity
-        style={styles.loginBtn}
-        onPress={() => onSubmit?.(nim, password)}
+        style={[styles.loginBtn, loading && styles.loginBtnDisabled]}
+        onPress={handleLoginPress}
+        disabled={loading}
+        activeOpacity={0.7}
       >
-        <Text style={styles.loginText}>Login</Text>
+        <Text style={styles.loginText}>{loading ? 'Memproses...' : 'Login'}</Text>
       </TouchableOpacity>
 
       {/* Face ID Button */}
-      <TouchableOpacity style={styles.faceIdBtn}>
+      <TouchableOpacity style={styles.faceIdBtn} disabled={loading}>
         <ScanFace size={24} color="#021ABF" />
         <Text style={styles.faceIdText}>Face ID</Text>
       </TouchableOpacity>
@@ -303,7 +321,17 @@ const styles = StyleSheet.create({
     marginTop: 12,
     textAlign: 'center',
   },
-
+  loginBtnDisabled: {
+    backgroundColor: '#7A90F5',
+  },
+  errorText: {
+    fontFamily: 'Poppins-Medium',
+    fontSize: 12,
+    color: '#D92121',
+    textAlign: 'center',
+    marginHorizontal: 32,
+    marginTop: 12,
+  },
 });
 
 

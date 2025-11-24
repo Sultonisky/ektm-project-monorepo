@@ -8,14 +8,24 @@ import {
   TouchableOpacity,
   Modal,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, IdCard, ChevronDown } from 'lucide-react-native';
-import { startPayment, goHome } from '../../../services/PaymentFlow';
+import useAuth from '../../../hooks/useAuth';
+import { paymentService } from '../../../services/api';
 import { bankImages } from '../../../constants/bank';
 
 type PaymentMethod = { key: string; name: string; logo: any };
+
+type AmountPayload = {
+  biayaPokok?: string;
+  biayaTambahanJurusan?: string;
+  biayaPraktikum?: string;
+  biayaUjian?: string;
+  biayaKegiatan?: string;
+};
 
 type Props = {
   navigation?: any;
@@ -30,12 +40,18 @@ const CONTENT_WIDTH = SCREEN_WIDTH - (CONTENT_PADDING * 2);
 
 export default function RincianPembayaranScreen({ navigation: propNavigation, route }: Props) {
   const navigation = useNavigation<any>();
+  const { user, mahasiswaProfile } = useAuth();
   const [selectedBankIndex, setSelectedBankIndex] = useState<number | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Mode tampilan berdasarkan status (belum_bayar | waiting | lunas/success)
   const statusParam: string | undefined = route?.params?.status;
   const isLunasMode = statusParam === 'lunas' || statusParam === 'success';
+
+  const biayaComponents = route?.params?.biayaComponents ?? null;
+  const mahasiswaId = mahasiswaProfile?.id ?? user?.id ?? null;
 
   // Data yang dibawa dari screen sebelumnya (opsional)
   const invoiceId: string = route?.params?.invoiceId || '1234567890954322376';
@@ -56,21 +72,57 @@ export default function RincianPembayaranScreen({ navigation: propNavigation, ro
   );
 
   // Data rincian pembayaran - bisa diambil dari props atau state
-  const paymentDetails = route?.params?.rincian || [
-    { label: 'Biaya Kuliah Pokok', value: 'Rp2.580.000' },
-    { label: 'Tambahan Jurusan', value: 'Rp700.000' },
-    { label: 'Biaya Praktikum', value: 'Rp1.200.000' },
-    { label: 'Biaya Ujian', value: 'Rp300.000' },
-    { label: 'Biaya Kegiatan Mahasiswa', value: 'Rp400.000' },
-  ];
+  const paymentDetails: Array<{ label: string; value: string }> =
+    (route?.params?.rincian as Array<{ label: string; value: string }> | undefined) ?? [
+      { label: 'Biaya Kuliah Pokok', value: 'Rp2.580.000' },
+      { label: 'Tambahan Jurusan', value: 'Rp700.000' },
+      { label: 'Biaya Praktikum', value: 'Rp1.200.000' },
+      { label: 'Biaya Ujian', value: 'Rp300.000' },
+      { label: 'Biaya Kegiatan Mahasiswa', value: 'Rp400.000' },
+    ];
 
   const total = route?.params?.total || 'Rp3.280.000';
+
+  const sanitizeCurrency = (value: string | number | undefined | null): string | undefined => {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value === 'number') {
+      return Math.round(value).toString();
+    }
+    const digits = value.toString().replace(/[^0-9]/g, '');
+    return digits.length ? digits : undefined;
+  };
+
+  const amountPayload: AmountPayload = useMemo(() => {
+    if (biayaComponents) {
+      return {
+        biayaPokok: sanitizeCurrency(biayaComponents.biayaPokok),
+        biayaTambahanJurusan: sanitizeCurrency(biayaComponents.biayaTambahanJurusan),
+        biayaPraktikum: sanitizeCurrency(biayaComponents.biayaPraktikum),
+        biayaUjian: sanitizeCurrency(biayaComponents.biayaUjian),
+        biayaKegiatan: sanitizeCurrency(biayaComponents.biayaKegiatan),
+      };
+    }
+
+    const map: AmountPayload = {};
+    paymentDetails.forEach(detail => {
+      const normalized = detail.label.toLowerCase();
+      const sanitized = sanitizeCurrency(detail.value);
+      if (!sanitized) return;
+      if (normalized.includes('pokok')) map.biayaPokok = sanitized;
+      else if (normalized.includes('tambahan')) map.biayaTambahanJurusan = sanitized;
+      else if (normalized.includes('praktikum')) map.biayaPraktikum = sanitized;
+      else if (normalized.includes('ujian')) map.biayaUjian = sanitized;
+      else if (normalized.includes('kegiatan')) map.biayaKegiatan = sanitized;
+    });
+    return map;
+  }, [biayaComponents, paymentDetails]);
+
   const studentName = route?.params?.nama || 'Nihat Hasannanto';
   const studentNim = route?.params?.nim || '19230211';
   const studentSemester = route?.params?.semester || 'Semester 5';
 
   // Cek apakah button bisa aktif (sudah memilih bank)
-  const isButtonEnabled = selectedBankIndex !== null;
+  const isButtonEnabled = selectedBankIndex !== null && !isSubmitting;
 
   const selectedBank = selectedBankIndex !== null ? paymentMethods[selectedBankIndex] : null;
 
@@ -82,26 +134,75 @@ export default function RincianPembayaranScreen({ navigation: propNavigation, ro
     }
   };
 
+  const normalizeBankKey = (value?: string) => {
+    if (!value) return undefined;
+    const key = value.toLowerCase() as keyof typeof bankImages;
+    return bankImages[key] ? key : undefined;
+  };
+
   const handleSelectBank = (index: number) => {
     setSelectedBankIndex(index);
     setIsDropdownOpen(false);
   };
 
-  const handlePayNow = () => {
-    if (!isButtonEnabled) return;
-    const picked = paymentMethods[selectedBankIndex!];
-    startPayment(navigation, {
-      invoiceId,
-      bankKey: picked.key as any,
-      nama: studentName,
-      nim: studentNim,
-      rincian: paymentDetails,
-      total: total,
-    });
+  const handlePayNow = async () => {
+    if (selectedBankIndex === null || isSubmitting) return;
+
+    const selected = paymentMethods[selectedBankIndex];
+    const selectedBankKey = normalizeBankKey(selected.key);
+
+    if (!mahasiswaId) {
+      setSubmitError('Data mahasiswa tidak ditemukan. Silakan coba lagi.');
+      return;
+    }
+
+    setSubmitError(null);
+    setIsSubmitting(true);
+
+    const paymentCode = `PAY-${Date.now()}`;
+    const payload: any = {
+      mahasiswaId: String(mahasiswaId),
+      paymentCode,
+      paymentMethod: 'bank',
+    };
+
+    if (amountPayload.biayaPokok) payload.biayaPokok = amountPayload.biayaPokok;
+    if (amountPayload.biayaTambahanJurusan) payload.biayaTambahanJurusan = amountPayload.biayaTambahanJurusan;
+    if (amountPayload.biayaPraktikum) payload.biayaPraktikum = amountPayload.biayaPraktikum;
+    if (amountPayload.biayaUjian) payload.biayaUjian = amountPayload.biayaUjian;
+    if (amountPayload.biayaKegiatan) payload.biayaKegiatan = amountPayload.biayaKegiatan;
+
+    try {
+      const response = await paymentService.createPaymentWithMidtrans(payload);
+      const responseBankKey = normalizeBankKey(response.midtransVaBank ?? undefined);
+      const bankKeyToUse = responseBankKey ?? selectedBankKey ?? ('bca' as keyof typeof bankImages);
+      const vaNumber = response.midtransVaNumber || response.midtransBillKey || invoiceId;
+
+      navigation.navigate('MenungguPembayaran', {
+        paymentId: response.id,
+        paymentCode: response.paymentCode,
+        status: response.status,
+        nama: studentName,
+        nim: studentNim,
+        rincian: paymentDetails,
+        total,
+        bankKey: bankKeyToUse,
+        invoiceId: vaNumber,
+        midtransPaymentUrl: response.midtransPaymentUrl,
+        midtransActions: response.midtransActions,
+        midtransBillKey: response.midtransBillKey,
+        midtransBillerCode: response.midtransBillerCode,
+      });
+    } catch (error: any) {
+      console.error('Failed to create payment with Midtrans:', error);
+      setSubmitError(error?.message || 'Gagal membuat pembayaran. Silakan coba lagi.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleBackToHome = () => {
-    goHome(navigation);
+    navigation.navigate('Main', { initialTab: 'ektm' });
   };
 
   return (
@@ -255,17 +356,24 @@ export default function RincianPembayaranScreen({ navigation: propNavigation, ro
             disabled={!isButtonEnabled}
             activeOpacity={0.8}
           >
-            <IdCard size={24} color={isButtonEnabled ? '#FFFFFF' : '#898989'} />
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <IdCard size={24} color={isButtonEnabled ? '#FFFFFF' : '#898989'} />
+            )}
             <Text
               style={[
                 styles.payButtonText,
                 !isButtonEnabled && styles.payButtonTextDisabled,
               ]}
             >
-              Bayar Sekarang
+              {isSubmitting ? 'Memproses...' : 'Bayar Sekarang'}
             </Text>
           </TouchableOpacity>
         )}
+        {submitError ? (
+          <Text style={styles.submitErrorText}>{submitError}</Text>
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -614,6 +722,13 @@ const styles = StyleSheet.create({
   },
   payButtonTextDisabled: {
     color: '#898989',
+  },
+  submitErrorText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
+    color: '#D92121',
+    textAlign: 'center',
+    marginTop: 12,
   },
 
   // Modal Styles

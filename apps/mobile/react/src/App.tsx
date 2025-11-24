@@ -1,21 +1,19 @@
 import React from 'react';
-import {
-  StatusBar,
-  StyleSheet,
-} from 'react-native';
-import MainNavigator from './components/MainNavigator';
+import { StatusBar } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import AppNavigator from './navigation/AppNavigator';
+import { AuthProvider } from './providers/AuthProvider';
 
 const App: React.FC = () => {
   return (
-    <>
-      <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
-      <MainNavigator />
-    </>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <StatusBar barStyle="light-content" backgroundColor="#0b1b3f" />
+        <AppNavigator />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 };
-
-const styles = StyleSheet.create({
-  // Add any global styles here if needed
-});
 
 export default App;

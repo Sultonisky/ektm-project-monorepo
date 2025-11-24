@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,45 +8,155 @@ import {
   Image,
   Dimensions,
   Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { ArrowLeft, Bell, Headphones, Lightbulb, IdCard, CarFront, ClipboardClock , Footprints, Medal, Trophy, GraduationCap, FileCheck, BookOpen, Package, FileEdit } from 'lucide-react-native';
+import { ArrowLeft, Bell, Headphones, Lightbulb, IdCard, CarFront, ClipboardClock, Footprints, Medal, Trophy, GraduationCap, FileCheck, BookOpen, Package, FileEdit } from 'lucide-react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+import useAuth from '../../hooks/useAuth';
+import { paymentService, type PaymentResponse, type BiayaDefaultResponse } from '../../services/api';
 
 const { width } = Dimensions.get('window');
 
-interface Props {
+const statusMeta: Record<string, { label: string; background: string; color: string }> = {
+  lunas: { label: 'Lunas', background: 'rgba(40, 167, 69, 0.15)', color: '#28A745' },
+  pending: { label: 'Menunggu', background: 'rgba(255, 193, 7, 0.15)', color: '#FFC107' },
+  belum: { label: 'Belum Bayar', background: 'rgba(220, 53, 69, 0.12)', color: '#DC3545' },
+};
+
+const paymentMenuItems = [
+  { id: 'biaya-kuliah', label: 'Biaya Kuliah', Icon: IdCard },
+  { id: 'cuti-akademik', label: 'Cuti Akademik', Icon: CarFront },
+  { id: 'mutasi', label: 'Mutasi', Icon: ClipboardClock },
+  { id: 'kegiatan', label: 'Kegiatan', Icon: Footprints },
+  { id: 'seminar', label: 'Seminar', Icon: Medal },
+  { id: 'bootcamp', label: 'Bootcamp', Icon: Trophy },
+  { id: 'wisuda', label: 'Wisuda', Icon: GraduationCap },
+  { id: 'ujian-her', label: 'Ujian HER', Icon: FileCheck },
+  { id: 'skripsi-ta', label: 'Skripsi / TA', Icon: BookOpen },
+  { id: 'admin-jaket-kip', label: 'Admin Jaket KIP', Icon: Package },
+  { id: 'ta-perbaikan', label: 'TA Perbaikan', Icon: FileEdit },
+];
+
+const formatCurrency = (value?: number | string | null) => {
+  const amount = Number(value ?? 0);
+  if (Number.isNaN(amount) || amount <= 0) {
+    return 'Rp0';
+  }
+  return `Rp${amount.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+};
+
+const formatDate = (iso?: string) => {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+const getPaymentAmount = (payment: PaymentResponse) => {
+  const raw = payment.totalPayment || payment.biayaPokok || payment.biayaTambahanJurusan || payment.biayaPraktikum || payment.biayaUjian || payment.biayaKegiatan || '0';
+  return formatCurrency(raw);
+};
+
+const getStatusBadge = (status?: string) => {
+  if (!status) return statusMeta.belum;
+  const key = status.toLowerCase();
+  return statusMeta[key] || statusMeta.belum;
+};
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+type Props = {
   navigation?: any;
   route?: any;
-}
+};
 
-export default function InfoBayarScreen({ navigation: propNavigation, route }: Props) {
+export default function InfoBayarScreen({ navigation: propNavigation }: Props) {
   const navigation = useNavigation<NavigationProp>();
+  const { user, mahasiswaProfile } = useAuth();
+
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
-  
-  // Reset selected highlight whenever this screen regains focus
-  useFocusEffect(React.useCallback(() => {
-    setSelectedItem(null);
-  }, []));
-  
-  // Mock payment menu data
-  const paymentMenuItems = [
-    { id: 'biaya-kuliah', label: 'Biaya Kuliah', Icon: IdCard },
-    { id: 'cuti-akademik', label: 'Cuti Akademik', Icon: CarFront },
-    { id: 'mutasi', label: 'Mutasi', Icon: ClipboardClock },
-    { id: 'kegiatan', label: 'Kegiatan', Icon: Footprints },
-    { id: 'seminar', label: 'Seminar', Icon: Medal },
-    { id: 'bootcamp', label: 'Bootcamp', Icon: Trophy },
-    { id: 'wisuda', label: 'Wisuda', Icon: GraduationCap },
-    { id: 'ujian-her', label: 'Ujian HER', Icon: FileCheck },
-    { id: 'skripsi-ta', label: 'Skripsi / TA', Icon: BookOpen },
-    { id: 'admin-jaket-kip', label: 'Admin Jaket KIP', Icon: Package },
-    { id: 'ta-perbaikan', label: 'TA Perbaikan', Icon: FileEdit },
-  ];
+  const [loadingData, setLoadingData] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [biayaDefault, setBiayaDefault] = useState<BiayaDefaultResponse | null>(null);
+  const [payments, setPayments] = useState<PaymentResponse[]>([]);
+
+  // Reset selection highlight when screen regains focus
+  useFocusEffect(
+    React.useCallback(() => {
+      setSelectedItem(null);
+    }, []),
+  );
+
+  // Fetch payment data when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = true;
+
+      const loadData = async () => {
+        if (!user?.id) return;
+        setLoadingData(true);
+        setErrorMessage(null);
+
+        try {
+          const [biaya, paymentList] = await Promise.all([
+            paymentService.getBiayaDefault(user.id),
+            paymentService.getAllPayments(user.id),
+          ]);
+
+          if (!isActive) return;
+          setBiayaDefault(biaya);
+          setPayments(paymentList);
+        } catch (error: any) {
+          if (!isActive) return;
+          console.error('Failed to load payment data:', error);
+          setErrorMessage(error?.message || 'Tidak dapat memuat data pembayaran.');
+        } finally {
+          if (isActive) {
+            setLoadingData(false);
+          }
+        }
+      };
+
+      loadData();
+
+      return () => {
+        isActive = false;
+      };
+    }, [user?.id]),
+  );
+
+  const activePayment = useMemo(() => {
+    if (!payments.length) return null;
+    return payments.find(payment => payment.status && payment.status.toLowerCase() !== 'lunas') || payments[0];
+  }, [payments]);
+
+  const biayaRincian = useMemo(() => {
+    const detail = biayaDefault?.biayaDefault;
+    if (!detail) return null;
+
+    const items = [
+      { label: 'Biaya Kuliah Pokok', value: detail.biayaPokok },
+      { label: 'Tambahan Jurusan', value: detail.biayaTambahanJurusan },
+      { label: 'Biaya Praktikum', value: detail.biayaPraktikum },
+      { label: 'Biaya Ujian', value: detail.biayaUjian },
+      { label: 'Biaya Kegiatan Mahasiswa', value: detail.biayaKegiatan },
+    ].filter(item => (item.value ?? 0) > 0)
+      .map(item => ({ label: item.label, value: formatCurrency(item.value) }));
+
+    return {
+      rincian: items,
+      totalFormatted: formatCurrency(detail.total),
+      semesterLabel: `Semester ${detail.semester}`,
+    };
+  }, [biayaDefault]);
+
+  const latestPayments = useMemo(() => payments.slice(0, 4), [payments]);
 
   const handleBackPress = () => {
     if (propNavigation?.goBack) {
@@ -57,7 +167,6 @@ export default function InfoBayarScreen({ navigation: propNavigation, route }: P
   };
 
   const handleNotificationPress = () => {
-    // Navigate to notification screen
     console.log('Navigate to notification');
   };
 
@@ -68,26 +177,81 @@ export default function InfoBayarScreen({ navigation: propNavigation, route }: P
   };
 
   const handlePaymentItemPress = (itemId: string) => {
-    // Navigate to payment detail screen based on itemId
-    console.log('Navigate to payment:', itemId);
     if (itemId === 'biaya-kuliah') {
-      // Navigate to Rincian Pembayaran screen
-      navigation.navigate('RincianPembayaran', {
-        nama: 'Nihat Hasannanto',
-        nim: '19230211',
-        rincian: [
-          { label: 'Biaya Kuliah Pokok', value: 'Rp2.580.000' },
-          { label: 'Tambahan Jurusan', value: 'Rp700.000' },
-          { label: 'Biaya Praktikum', value: 'Rp1.200.000' },
-          { label: 'Biaya Ujian', value: 'Rp300.000' },
-          { label: 'Biaya Kegiatan Mahasiswa', value: 'Rp400.000' },
-        ],
-        total: 'Rp3.280.000',
-      });
-    } else if (itemId === 'cuti-akademik') {
-      // Navigate to Cuti Akademik screen
-      navigation.navigate('CutiAkademik');
+      if (biayaRincian) {
+        navigation.navigate('RincianPembayaran', {
+          nama: mahasiswaProfile?.name || user?.name,
+          nim: mahasiswaProfile?.nim?.toString() || user?.nim?.toString(),
+          rincian: biayaRincian.rincian,
+          total: biayaRincian.totalFormatted,
+          semester: biayaRincian.semesterLabel,
+          status: activePayment?.status as any,
+          paymentCode: activePayment?.paymentCode,
+          biayaComponents: biayaDefault?.biayaDefault ?? null,
+        });
+        return;
+      }
     }
+
+    if (itemId === 'cuti-akademik') {
+      navigation.navigate('CutiAkademik');
+      return;
+    }
+
+    console.log('Navigate to payment:', itemId);
+  };
+
+  const renderPaymentSummary = () => {
+    if (loadingData) {
+      return (
+        <View style={styles.dataCard}>
+          <ActivityIndicator color="#1E69DD" />
+          <Text style={styles.dataCardLoadingText}>Memuat data pembayaran...</Text>
+        </View>
+      );
+    }
+
+    if (errorMessage) {
+      return (
+        <View style={[styles.dataCard, styles.dataCardError]}>
+          <Text style={styles.dataCardTitle}>Tagihan Aktif</Text>
+          <Text style={styles.dataCardErrorText}>{errorMessage}</Text>
+        </View>
+      );
+    }
+
+    if (biayaRincian) {
+      const badge = getStatusBadge(activePayment?.status);
+      return (
+        <View style={styles.dataCard}>
+          <View style={styles.dataCardHeader}>
+            <Text style={styles.dataCardTitle}>Tagihan Aktif</Text>
+            <View style={[styles.statusBadge, { backgroundColor: badge.background }]}>
+              <Text style={[styles.statusBadgeText, { color: badge.color }]}>{badge.label}</Text>
+            </View>
+          </View>
+          <Text style={styles.dataCardValue}>{biayaRincian.totalFormatted}</Text>
+          <Text style={styles.dataCardSubtitle}>
+            {biayaRincian.semesterLabel}
+            {mahasiswaProfile?.jurusan?.name ? ` · ${mahasiswaProfile.jurusan.name}` : ''}
+          </Text>
+          {activePayment?.paymentCode ? (
+            <Text style={styles.dataCardFootnote}>Kode Pembayaran: {activePayment.paymentCode}</Text>
+          ) : null}
+        </View>
+      );
+    }
+
+    if (biayaDefault?.message) {
+      return (
+        <View style={styles.dataCard}>
+          <Text style={styles.dataCardTitle}>Tagihan Aktif</Text>
+          <Text style={styles.dataCardSubtitle}>{biayaDefault.message}</Text>
+        </View>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -97,14 +261,14 @@ export default function InfoBayarScreen({ navigation: propNavigation, route }: P
         <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
           <ArrowLeft color="#000" size={24} />
         </TouchableOpacity>
-        
+
         <Text style={styles.headerTitle}>Info Bayar</Text>
-        
+
         <View style={styles.headerIcons}>
           <TouchableOpacity onPress={handleCustomerServicePress} style={styles.iconButton}>
             <Headphones color="#000" size={24} />
           </TouchableOpacity>
-          
+
           <TouchableOpacity onPress={handleNotificationPress} style={styles.iconButton}>
             <Bell color="#000" size={20} />
             <View style={styles.notificationBadge} />
@@ -113,24 +277,27 @@ export default function InfoBayarScreen({ navigation: propNavigation, route }: P
       </View>
 
       {/* Content */}
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Tagihan summary */}
+        {renderPaymentSummary()}
+
         {/* Tentang Info Bayar Section */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Tentang Info Bayar</Text>
           <Text style={styles.sectionArrow}>➔</Text>
         </View>
-        
+
         <View style={{ height: 15 }} />
-        
+
         {/* Carousel */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {/* History Pembayaran Card */}
           <View style={styles.carouselCard}>
-            <Image 
+            <Image
               source={require('@images/bg_history_pembayaran.png')}
               style={styles.carouselBackground}
               resizeMode="cover"
@@ -144,7 +311,7 @@ export default function InfoBayarScreen({ navigation: propNavigation, route }: P
                   <Text style={styles.carouselLabelText}>UBSI</Text>
                 </View>
                 <View style={styles.carouselBadge}>
-                  <Text style={styles.carouselBadgeText}>8x Pembayaran</Text>
+                  <Text style={styles.carouselBadgeText}>{`${payments.length}x Pembayaran`}</Text>
                 </View>
               </View>
             </View>
@@ -154,7 +321,7 @@ export default function InfoBayarScreen({ navigation: propNavigation, route }: P
 
           {/* Tahapan Pembayaran Card */}
           <View style={styles.carouselCard}>
-            <Image 
+            <Image
               source={require('@images/bg_tahapan_pembayaran.png')}
               style={styles.carouselBackground}
               resizeMode="cover"
@@ -179,9 +346,9 @@ export default function InfoBayarScreen({ navigation: propNavigation, route }: P
           <Text style={styles.sectionTitle}>Menu Pembayaran</Text>
           <Text style={styles.sectionArrow}>➔</Text>
         </View>
-        
+
         <View style={{ height: 15 }} />
-        
+
         {/* Payment Menu Grid */}
         <View style={styles.paymentGrid}>
           {paymentMenuItems.map((item, index) => {
@@ -189,7 +356,7 @@ export default function InfoBayarScreen({ navigation: propNavigation, route }: P
             const isLastItem = index === paymentMenuItems.length - 1;
             const isSelected = selectedItem === item.id;
             const IconComponent = item.Icon;
-            
+
             return (
               <TouchableOpacity
                 key={item.id}
@@ -203,19 +370,54 @@ export default function InfoBayarScreen({ navigation: propNavigation, route }: P
                 activeOpacity={0.7}
               >
                 <View style={styles.paymentIconContainer}>
-                  <IconComponent 
-                    color={isSelected ? "#1E69DD" : "#FFFFFF"} 
-                    size={24} 
+                  <IconComponent
+                    color={isSelected ? '#1E69DD' : '#FFFFFF'}
+                    size={24}
                   />
                 </View>
                 <Text style={[
                   styles.paymentLabel,
-                  isSelected && styles.paymentLabelSelected
-                ]}>{item.label}</Text>
+                  isSelected && styles.paymentLabelSelected,
+                ]}
+                >
+                  {item.label}
+                </Text>
               </TouchableOpacity>
             );
           })}
         </View>
+
+        <View style={{ height: 24 }} />
+
+        {/* Riwayat Pembayaran */}
+        {latestPayments.length > 0 ? (
+          <View style={styles.historyContainer}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Riwayat Pembayaran</Text>
+              <Text style={styles.sectionArrow}>➔</Text>
+            </View>
+            <View style={{ height: 12 }} />
+            <View style={styles.historyList}>
+              {latestPayments.map(payment => {
+                const badge = getStatusBadge(payment.status);
+                return (
+                  <View key={payment.id} style={styles.historyItem}>
+                    <View style={styles.historyItemLeft}>
+                      <Text style={styles.historyItemTitle}>{payment.paymentCode || 'Pembayaran Kuliah'}</Text>
+                      <Text style={styles.historyItemSubtitle}>{formatDate(payment.createdAt)}</Text>
+                    </View>
+                    <View style={styles.historyItemRight}>
+                      <Text style={styles.historyItemAmount}>{getPaymentAmount(payment)}</Text>
+                      <View style={[styles.historyStatusBadge, { backgroundColor: badge.background }] }>
+                        <Text style={[styles.historyStatusText, { color: badge.color }]}>{badge.label}</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -228,8 +430,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F0F0F0',
   },
-  
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -275,8 +475,6 @@ const styles = StyleSheet.create({
     borderColor: '#F0F0F0',
     borderRadius: 4,
   },
-  
-  // ScrollView
   scrollView: {
     flex: 1,
   },
@@ -285,8 +483,71 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 20,
   },
-  
-  // Section Header
+  dataCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 24,
+  },
+  dataCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  dataCardTitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#000',
+  },
+  dataCardValue: {
+    fontSize: 24,
+    fontFamily: 'Poppins-Bold',
+    color: '#1E69DD',
+  },
+  dataCardSubtitle: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Medium',
+    color: '#4E4E4E',
+    marginTop: 4,
+  },
+  dataCardFootnote: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+    color: '#777777',
+    marginTop: 12,
+  },
+  dataCardLoadingText: {
+    marginTop: 12,
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+    color: '#4E4E4E',
+    textAlign: 'center',
+  },
+  dataCardError: {
+    borderWidth: 1,
+    borderColor: 'rgba(217, 33, 33, 0.2)',
+  },
+  dataCardErrorText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+    color: '#D92121',
+    marginTop: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 100,
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-SemiBold',
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -302,8 +563,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
   },
-  
-  // Carousel
   carouselCard: {
     width: 212,
     height: 85,
@@ -351,8 +610,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular',
     color: '#fff',
   },
-  
-  // Payment Menu Grid
   paymentGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -401,6 +658,61 @@ const styles = StyleSheet.create({
   },
   paymentLabelSelected: {
     color: '#1E69DD',
+  },
+  historyContainer: {
+    marginTop: 16,
+  },
+  historyList: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F4F4F4',
+  },
+  historyItemLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  historyItemRight: {
+    alignItems: 'flex-end',
+  },
+  historyItemTitle: {
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#000000',
+  },
+  historyItemSubtitle: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+    color: '#7A7A7A',
+    marginTop: 2,
+  },
+  historyItemAmount: {
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#1E69DD',
+  },
+  historyStatusBadge: {
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 100,
+  },
+  historyStatusText: {
+    fontSize: 11,
+    fontFamily: 'Poppins-SemiBold',
   },
 });
 
