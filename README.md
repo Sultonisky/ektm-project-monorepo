@@ -8,8 +8,6 @@
 
 </div>
 
-<br/>
-
 <div align="center">
 
 <img src="https://img.shields.io/badge/NestJS-EA2845?style=for-the-badge&logo=nestjs&logoColor=white" alt="Backend" />
@@ -17,8 +15,6 @@
 <img src="https://img.shields.io/badge/React_Native-61DAFB?style=for-the-badge&logo=react&logoColor=white" alt="Mobile" />
 
 </div>
-
-<br/>
 
 <div align="center">
 
