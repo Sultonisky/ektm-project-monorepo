@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { MapPin, Bell, Lightbulb, User, IdCard, DoorClosed, Phone as PhoneIcon, Mail, Puzzle, GraduationCap, Headset } from 'lucide-react-native';
+import { MapPin, Bell, Lightbulb, User, IdCard, DoorClosed, Phone as PhoneIcon, Mail, Puzzle, GraduationCap, Headset, Pencil } from 'lucide-react-native';
 import useAuth from '../../hooks/useAuth';
 import { paymentService } from '../../services/api';
+import UpdateDataBottomSheet from '../../components/UpdateDataBottomSheet';
+import { useNotifications } from '../../providers/NotificationProvider';
 
 const { width } = Dimensions.get('window');
 
@@ -31,8 +33,10 @@ type PaymentStatusVariant = 'lunas' | 'pending' | 'belum_lunas';
 export default function EKtmScreen() {
   const navigation = useNavigation<any>();
   const { mahasiswaProfile, user } = useAuth();
+  const { unreadCount } = useNotifications();
   const scrollY = useRef(new Animated.Value(0)).current;
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatusVariant>('pending');
+  const [showUpdateSheet, setShowUpdateSheet] = useState(false);
 
   const currentDate = new Date();
   const studentName = mahasiswaProfile?.name || user?.name || 'Mahasiswa UBSI';
@@ -75,20 +79,27 @@ export default function EKtmScreen() {
     React.useCallback(() => {
       let isActive = true;
 
+      // Reset status to pending when user changes or screen focuses
+      setPaymentStatus('pending');
+
       const loadPaymentStatus = async () => {
-        if (!user?.id) return;
+        if (!user?.id) {
+          if (isActive) setPaymentStatus('belum_lunas');
+          return;
+        }
         try {
           const paymentList = await paymentService.getAllPayments(user.id);
           if (!isActive) return;
           if (!paymentList.length) {
-            setPaymentStatus('lunas');
+            // Jika tidak ada payment sama sekali, berarti belum pernah melakukan pembayaran
+            setPaymentStatus('belum_lunas');
             return;
           }
           const latest = paymentList[0];
           setPaymentStatus(mapStatus(latest.status));
         } catch (error) {
           console.error('Failed to load payment status:', error);
-          if (isActive) setPaymentStatus('pending');
+          if (isActive) setPaymentStatus('belum_lunas');
         }
       };
 
@@ -193,9 +204,17 @@ export default function EKtmScreen() {
             <Headset color="#1E69DD" size={24} />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => {}} style={styles.notificationBtn}>
+          <TouchableOpacity onPress={() => navigation.navigate('Notification')} style={styles.notificationBtn}>
             <Bell color="#1E69DD" size={20} />
-            <View style={styles.notificationBadge} />
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                {unreadCount > 9 ? (
+                  <Text style={styles.notificationBadgeText}>9+</Text>
+                ) : (
+                  <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
+                )}
+              </View>
+            )}
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -245,7 +264,11 @@ export default function EKtmScreen() {
         </View>
         <View style={{ height: 15 }} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.carouselCardContainer}>
+          <TouchableOpacity 
+            style={styles.carouselCardContainer}
+            onPress={() => navigation.navigate('JadwalPerkuliahan')}
+            activeOpacity={0.7}
+          >
             <Image
               source={require('@images/Rectangle.png')}
               style={styles.carouselCardBackground}
@@ -262,7 +285,7 @@ export default function EKtmScreen() {
                 <View style={styles.carouselChipBlue}><Text style={styles.carouselChipBlueText}>Aktif</Text></View>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
 
           <View style={{ width: 10 }} />
 
@@ -291,7 +314,13 @@ export default function EKtmScreen() {
         {/* Data Mahasiswa */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Data Mahasiswa</Text>
-          <View style={styles.updateBtn}><Text style={styles.updateBtnText}>✎ Update Data</Text></View>
+          <TouchableOpacity 
+            style={styles.updateBtn}
+            onPress={() => setShowUpdateSheet(true)}
+          >
+            <Pencil color="#fff" size={14} />
+            <Text style={styles.updateBtnText}>Update Data</Text>
+          </TouchableOpacity>
         </View>
         <View style={{ height: 10 }} />
         <Text style={styles.sectionSubtitle}>Data Personal</Text>
@@ -321,6 +350,12 @@ export default function EKtmScreen() {
 
         <View style={{ height: 100 }} />
       </Animated.ScrollView>
+
+      {/* Update Data Bottom Sheet */}
+      <UpdateDataBottomSheet 
+        visible={showUpdateSheet}
+        onClose={() => setShowUpdateSheet(false)}
+      />
 
     </SafeAreaView>
   );
@@ -465,15 +500,23 @@ const styles = StyleSheet.create({
 
   notificationBadge: {
     position: 'absolute',
-    width: 8,
-    height: 8,
-    right: 15,
-    top: 15,
-    backgroundColor: '#1E69DD',
-    borderWidth: 1,
-    borderColor: '#000',
-    borderRadius: 4,
+    minWidth: 18,
+    height: 18,
+    right: 12,
+    top: 12,
+    backgroundColor: '#FF3B30',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderRadius: 9,
     zIndex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'Poppins-Bold',
   },
 
   scrollContent: {
@@ -551,8 +594,8 @@ const styles = StyleSheet.create({
   carouselChipCyan: { backgroundColor: '#1E69DD', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4 },
   carouselChipBlueText: { fontSize: 10, color: '#fff', fontFamily: 'Poppins-Regular' },
 
-  updateBtn: { backgroundColor: '#1E69DD', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6 },
-  updateBtnText: { color: '#fff', fontSize: 12, fontFamily: 'Poppins-Regular' },
+  updateBtn: { backgroundColor: '#1E69DD', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  updateBtnText: { color: '#fff', fontSize: 12, fontFamily: 'Poppins-Medium' },
 
   infoCardBlue: { backgroundColor: '#1E69DD', borderRadius: 20, padding: 16 },
   infoCardBlueAlt: { backgroundColor: '#1E69DD', borderRadius: 20, padding: 16 },

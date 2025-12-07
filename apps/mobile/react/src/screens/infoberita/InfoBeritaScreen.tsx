@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -129,17 +129,37 @@ export default function InfoBeritaScreen() {
   }, [featuredNews.length]);
 
   const renderCarouselItem = ({ item }: any) => (
-    <View style={styles.carouselItem}>
+    <TouchableOpacity 
+      style={styles.carouselItem}
+      onPress={() => navigation.navigate('DetailBerita', {
+        id: item.id,
+        title: item.title,
+        description: item.subtitle,
+        image: item.image,
+        time: 'Baru saja',
+        category: 'Berita Terbaru',
+      })}
+    >
       <Image source={item.image} style={styles.carouselImage} resizeMode="cover" />
       <View style={styles.carouselContent}>
         <Text style={styles.carouselTitle}>{item.title}</Text>
         <Text style={styles.carouselSubtitle}>{item.subtitle}</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderNewsItem = ({ item }: any) => (
-    <TouchableOpacity style={styles.newsItem}>
+    <TouchableOpacity 
+      style={styles.newsItem}
+      onPress={() => navigation.navigate('DetailBerita', {
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        image: item.image,
+        time: item.time,
+        category: item.category,
+      })}
+    >
       <Image source={item.image} style={styles.newsImage} resizeMode="cover" />
       <View style={styles.newsContent}>
         <Text style={styles.newsTitle}>{item.title}</Text>
@@ -158,7 +178,7 @@ export default function InfoBeritaScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <ArrowLeft color="#000" size={24} />
+          <ChevronLeft color="#000" size={24} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Berita</Text>
       </View>
@@ -236,7 +256,10 @@ export default function InfoBeritaScreen() {
 
         {/* News List */}
         <FlatList
-          data={newsArticles}
+          data={activeCategory === 'Semua' 
+            ? newsArticles 
+            : newsArticles.filter(article => article.category === activeCategory)
+          }
           renderItem={renderNewsItem}
           keyExtractor={(item) => item.id.toString()}
           scrollEnabled={false}

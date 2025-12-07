@@ -35,7 +35,7 @@ export class PaymentService {
       midtransTransactionId: payment.midtransTransactionId,
       midtransPaymentUrl: payment.midtransPaymentUrl,
       midtransVaNumber: payment.midtransVaNumber,
-      midtransVaBank: payment.midtransVaBank,
+      // midtransVaBank is not stored in DB, will be set from Midtrans response when needed
       midtransBillKey: payment.midtransBillKey,
       midtransBillerCode: payment.midtransBillerCode,
       createdAt: payment.createdAt,
@@ -111,6 +111,22 @@ export class PaymentService {
       const midtransResponse = await this.midtransService.createTransaction(midtransRequest);
       
       this.logger.log(`Midtrans transaction created: ${midtransResponse.transaction_id}`, 'PaymentService');
+      this.logger.log(`Midtrans response: ${JSON.stringify({
+        payment_type: midtransResponse.payment_type,
+        va_numbers: midtransResponse.va_numbers,
+        bill_key: midtransResponse.bill_key,
+        biller_code: midtransResponse.biller_code,
+        status_code: midtransResponse.status_code,
+        status_message: midtransResponse.status_message,
+      })}`, 'PaymentService');
+
+      // Extract VA number and bank from response
+      const vaNumber = midtransResponse.va_numbers?.[0]?.va_number;
+      const vaBank = midtransResponse.va_numbers?.[0]?.bank;
+      
+      if (dto.paymentMethod === 'bank' && !vaNumber) {
+        this.logger.warn(`VA number not found in Midtrans response for bank transfer. Response: ${JSON.stringify(midtransResponse)}`, 'PaymentService');
+      }
 
       // Create payment record in database
       const created = await this.prisma.payment.create({
@@ -130,7 +146,7 @@ export class PaymentService {
           midtransOrderId: midtransResponse.order_id,
           midtransTransactionId: midtransResponse.transaction_id,
           midtransPaymentUrl: midtransResponse.actions?.[0]?.url,
-          midtransVaNumber: midtransResponse.va_numbers?.[0]?.va_number,
+          midtransVaNumber: vaNumber,
           midtransBillKey: midtransResponse.bill_key,
           midtransBillerCode: midtransResponse.biller_code,
         } as any,
@@ -148,6 +164,13 @@ export class PaymentService {
           status: true,
           createdAt: true,
           updatedAt: true,
+          // Midtrans fields
+          midtransOrderId: true,
+          midtransTransactionId: true,
+          midtransPaymentUrl: true,
+          midtransVaNumber: true,
+          midtransBillKey: true,
+          midtransBillerCode: true,
         },
       });
 
@@ -175,8 +198,14 @@ export class PaymentService {
       response.midtransTransactionStatus = midtransResponse.transaction_status;
       response.midtransPaymentType = midtransResponse.payment_type;
       response.midtransPaymentUrl = midtransResponse.actions?.[0]?.url;
-      response.midtransVaBank = midtransResponse.va_numbers?.[0]?.bank;
+      // Use vaNumber and vaBank from extracted variables (vaBank not stored in DB, only in response)
+      response.midtransVaNumber = vaNumber || created.midtransVaNumber || undefined;
+      response.midtransVaBank = vaBank || undefined;
+      response.midtransBillKey = midtransResponse.bill_key;
+      response.midtransBillerCode = midtransResponse.biller_code;
       response.midtransActions = midtransResponse.actions;
+      
+      this.logger.log(`Payment response prepared with VA number: ${response.midtransVaNumber}, Bank: ${response.midtransVaBank}`, 'PaymentService');
       
       return response;
 
@@ -434,6 +463,13 @@ export class PaymentService {
         status: true,
         createdAt: true,
         updatedAt: true,
+        // Midtrans fields
+        midtransOrderId: true,
+        midtransTransactionId: true,
+        midtransPaymentUrl: true,
+        midtransVaNumber: true,
+        midtransBillKey: true,
+        midtransBillerCode: true,
       },
     });
     if (!payment) {
@@ -442,7 +478,82 @@ export class PaymentService {
     }
     
     this.logger.log(`Payment found: ${payment.paymentCode} with total: ${payment.totalPayment}`, 'PaymentService');
-    return this.toResponse(payment);
+    const response = this.toResponse(payment);
+    
+    // If we have midtransOrderId, sync status and info from Midtrans
+    if (payment.midtransOrderId) {
+      try {
+        const midtransStatus = await this.midtransService.getTransactionStatus(payment.midtransOrderId);
+        
+        // Update bank info if missing
+        if (!response.midtransVaBank) {
+          response.midtransVaBank = midtransStatus.va_numbers?.[0]?.bank;
+        }
+        
+        // Update VA number if it's missing but available from Midtrans
+        if (!response.midtransVaNumber && midtransStatus.va_numbers?.[0]?.va_number) {
+          response.midtransVaNumber = midtransStatus.va_numbers[0].va_number;
+        }
+        
+        // Check if status needs to be updated
+        const midtransTransactionStatus = midtransStatus.transaction_status;
+        const currentPaymentStatus = payment.status?.toLowerCase();
+        const expectedStatus = this.mapMidtransStatusToPaymentStatus(midtransTransactionStatus);
+        
+        // Update status if Midtrans says it's settled/captured but our DB says it's not
+        if ((midtransTransactionStatus === 'settlement' || midtransTransactionStatus === 'capture') && currentPaymentStatus !== 'lunas') {
+          this.logger.log(
+            `Midtrans status is '${midtransTransactionStatus}' but payment status is '${currentPaymentStatus}'. Updating to 'lunas'...`,
+            'PaymentService'
+          );
+          
+          await this.updatePaymentStatus(payment.id.toString(), 'lunas', {
+            midtransTransactionId: midtransStatus.transaction_id,
+            midtransStatus: midtransTransactionStatus,
+          });
+          
+          // Reload payment data to get updated status and return fresh response
+          const updatedPayment = await this.prisma.payment.findUnique({
+            where: { id: BigInt(payment.id) },
+            select: {
+              id: true,
+              mahasiswaId: true,
+              paymentCode: true,
+              biayaPokok: true,
+              biayaTambahanJurusan: true,
+              biayaPraktikum: true,
+              biayaUjian: true,
+              biayaKegiatan: true,
+              totalPayment: true,
+              paymentMethod: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+              midtransOrderId: true,
+              midtransTransactionId: true,
+              midtransPaymentUrl: true,
+              midtransVaNumber: true,
+              midtransBillKey: true,
+              midtransBillerCode: true,
+            },
+          });
+          
+          if (updatedPayment) {
+            const updatedResponse = this.toResponse(updatedPayment);
+            updatedResponse.midtransVaBank = response.midtransVaBank || midtransStatus.va_numbers?.[0]?.bank;
+            updatedResponse.midtransTransactionStatus = midtransTransactionStatus;
+            updatedResponse.midtransPaymentType = midtransStatus.payment_type;
+            this.logger.log(`Payment ${payment.id} status updated to: lunas`, 'PaymentService');
+            return updatedResponse;
+          }
+        }
+      } catch (error) {
+        // Log but don't fail - status sync is best effort
+        this.logger.warn(`Failed to sync status from Midtrans for order ${payment.midtransOrderId}: ${error.message}`, 'PaymentService');
+      }
+    }
+    
+    return response;
   }
 
   async update(id: string, dto: UpdatePaymentDto): Promise<PaymentResponseDto> {

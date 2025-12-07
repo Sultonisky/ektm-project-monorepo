@@ -7,17 +7,30 @@ import {
   WelcomeScreen,
   EKtmScreen,
   ScannerScreen,
+  BarcodeScreen,
+  HistoryPembayaranScreen,
   RincianPembayaranScreen,
   MenungguPembayaranScreen,
   PembayaranSuksesScreen,
   CutiAkademikScreen,
   FormPengajuanScreen,
   CutiSuksesScreen,
+  HistoryCutiScreen,
+  BootcampScreen,
+  KegiatanScreen,
+  SeminarScreen,
+  MutasiScreen,
+  DetailMutasiScreen,
+  NotificationScreen,
+  SyaratDanKetentuanScreen,
+  DetailBeritaScreen,
 } from '../screens';
 import LoginScreen from '../screens/login/LoginScreen';
 import MainNavigator from '../components/MainNavigator';
 import KampusUBSIPages from '../screens/profile/kampus/kampus';
+import MapsKampusScreen from '../screens/profile/kampus/maps';
 import TentangScreen from '../screens/profile/TentangScreen';
+import JadwalPerkuliahan from '../screens/ektm/jadwal-perkuliahan';
 import useAuth from '../hooks/useAuth';
 
 export type RootStackParamList = {
@@ -27,8 +40,12 @@ export type RootStackParamList = {
   Main: { initialTab?: 'ektm' | 'infobayar' | 'berita' | 'profile' } | undefined;
   EKtm: undefined;
   Scanner: undefined;
+  Barcode: undefined;
   KampusUBSI: undefined;
+  MapsKampus: { campusIndex?: number } | undefined;
   Tentang: undefined;
+  JadwalPerkuliahan: undefined;
+  HistoryPembayaran: undefined;
   RincianPembayaran: {
     nama?: string;
     nim?: string;
@@ -60,6 +77,22 @@ export type RootStackParamList = {
   CutiAkademik: undefined;
   FormPengajuan: undefined;
   CutiSukses: undefined;
+  HistoryCuti: undefined;
+  Bootcamp: undefined;
+  Kegiatan: undefined;
+  Seminar: undefined;
+  Mutasi: undefined;
+  DetailMutasi: undefined;
+  Notification: undefined;
+  SyaratDanKetentuan: undefined;
+  DetailBerita: {
+    id: number;
+    title: string;
+    description: string;
+    image: any;
+    time: string;
+    category: string;
+  };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -78,14 +111,27 @@ const AppNavigator: React.FC = () => {
             <Stack.Screen name="Main" component={MainNavigator} />
             <Stack.Screen name="EKtm" component={EKtmScreen} />
             <Stack.Screen name="Scanner" component={ScannerScreen} />
+            <Stack.Screen name="Barcode" component={BarcodeScreen} />
             <Stack.Screen name="KampusUBSI" component={KampusUBSIPages} />
+            <Stack.Screen name="MapsKampus" component={MapsKampusScreen} />
             <Stack.Screen name="Tentang" component={TentangScreen} />
+            <Stack.Screen name="JadwalPerkuliahan" component={JadwalPerkuliahan} />
+            <Stack.Screen name="HistoryPembayaran" component={HistoryPembayaranScreen} />
             <Stack.Screen name="RincianPembayaran" component={RincianPembayaranScreen} />
             <Stack.Screen name="MenungguPembayaran" component={MenungguPembayaranScreen} />
             <Stack.Screen name="PembayaranSukses" component={PembayaranSuksesScreen} />
             <Stack.Screen name="CutiAkademik" component={CutiAkademikScreen} />
             <Stack.Screen name="FormPengajuan" component={FormPengajuanScreen} />
             <Stack.Screen name="CutiSukses" component={CutiSuksesScreen} />
+            <Stack.Screen name="HistoryCuti" component={HistoryCutiScreen} />
+            <Stack.Screen name="Bootcamp" component={BootcampScreen} />
+            <Stack.Screen name="Kegiatan" component={KegiatanScreen} />
+            <Stack.Screen name="Seminar" component={SeminarScreen} />
+            <Stack.Screen name="Mutasi" component={MutasiScreen} />
+            <Stack.Screen name="DetailMutasi" component={DetailMutasiScreen} />
+            <Stack.Screen name="Notification" component={NotificationScreen} />
+            <Stack.Screen name="SyaratDanKetentuan" component={SyaratDanKetentuanScreen} />
+            <Stack.Screen name="DetailBerita" component={DetailBeritaScreen} />
           </>
         ) : (
           <>

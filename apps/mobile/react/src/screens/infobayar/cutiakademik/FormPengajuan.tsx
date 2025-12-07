@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft, ChevronDown, Check } from 'lucide-react-native';
+import { ChevronLeft, ChevronDown, Check } from 'lucide-react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../navigation/AppNavigator';
 
@@ -234,7 +234,7 @@ export default function FormPengajuan({ navigation: propNavigation, route }: Pro
         <SafeAreaView edges={['top']} style={styles.safeAreaHeader}>
           <View style={styles.headerTopRow}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
-              <ArrowLeft color="#FFFFFF" size={24} />
+              <ChevronLeft color="#FFFFFF" size={24} />
             </TouchableOpacity>
             
             <View style={styles.titleContainer}>

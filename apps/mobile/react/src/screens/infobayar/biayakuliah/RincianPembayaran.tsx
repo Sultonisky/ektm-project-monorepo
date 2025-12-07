@@ -12,10 +12,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft, IdCard, ChevronDown } from 'lucide-react-native';
+import { ChevronLeft, IdCard, ChevronDown } from 'lucide-react-native';
 import useAuth from '../../../hooks/useAuth';
 import { paymentService } from '../../../services/api';
 import { bankImages } from '../../../constants/bank';
+import { useNotifications } from '../../../providers/NotificationProvider';
 
 type PaymentMethod = { key: string; name: string; logo: any };
 
@@ -41,6 +42,7 @@ const CONTENT_WIDTH = SCREEN_WIDTH - (CONTENT_PADDING * 2);
 export default function RincianPembayaranScreen({ navigation: propNavigation, route }: Props) {
   const navigation = useNavigation<any>();
   const { user, mahasiswaProfile } = useAuth();
+  const { addNotification } = useNotifications();
   const [selectedBankIndex, setSelectedBankIndex] = useState<number | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,7 +56,7 @@ export default function RincianPembayaranScreen({ navigation: propNavigation, ro
   const mahasiswaId = mahasiswaProfile?.id ?? user?.id ?? null;
 
   // Data yang dibawa dari screen sebelumnya (opsional)
-  const invoiceId: string = route?.params?.invoiceId || '1234567890954322376';
+  const invoiceId: string | undefined = route?.params?.invoiceId;
   const paidBankKey: string | undefined = route?.params?.bankKey; // contoh: 'bca'
 
   // Data metode pembayaran yang tersedia
@@ -176,7 +178,25 @@ export default function RincianPembayaranScreen({ navigation: propNavigation, ro
       const response = await paymentService.createPaymentWithMidtrans(payload);
       const responseBankKey = normalizeBankKey(response.midtransVaBank ?? undefined);
       const bankKeyToUse = responseBankKey ?? selectedBankKey ?? ('bca' as keyof typeof bankImages);
-      const vaNumber = response.midtransVaNumber || response.midtransBillKey || invoiceId;
+      const vaNumber = response.midtransVaNumber || response.midtransBillKey;
+      
+      if (!vaNumber) {
+        setSubmitError('VA number tidak tersedia dari Midtrans. Silakan coba lagi.');
+        return;
+      }
+
+      // Add notification for payment initiated
+      await addNotification({
+        type: 'payment',
+        title: 'Pembayaran Semester',
+        description: `Menunggu pembayaran ${total} via ${selected.name}`,
+        isRead: false,
+        data: {
+          paymentId: response.id,
+          total,
+          bankKey: bankKeyToUse,
+        },
+      });
 
       navigation.navigate('MenungguPembayaran', {
         paymentId: response.id,
@@ -215,7 +235,7 @@ export default function RincianPembayaranScreen({ navigation: propNavigation, ro
           activeOpacity={0.7}
         >
           <View style={styles.backButtonCircle}>
-            <ArrowLeft size={18} color="#000000" />
+            <ChevronLeft size={18} color="#000000" />
           </View>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Rincian Pembayaran</Text>
@@ -309,7 +329,7 @@ export default function RincianPembayaranScreen({ navigation: propNavigation, ro
           <Text style={styles.detailsTitle}>Rincian Pembayaran</Text>
 
           {/* Baris Invoice (untuk Lunas tampilkan) */}
-          {isLunasMode && (
+          {isLunasMode && invoiceId && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Invoice</Text>
               <Text style={styles.detailValue}>{invoiceId}</Text>

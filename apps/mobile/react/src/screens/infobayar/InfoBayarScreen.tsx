@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { ArrowLeft, Bell, Headphones, Lightbulb, IdCard, CarFront, ClipboardClock, Footprints, Medal, Trophy, GraduationCap, FileCheck, BookOpen, Package, FileEdit } from 'lucide-react-native';
+import { ChevronLeft, Bell, Headphones, Lightbulb, IdCard, CarFront, ClipboardClock, Footprints, Medal, Trophy, GraduationCap, FileCheck, BookOpen, Package, FileEdit } from 'lucide-react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import useAuth from '../../hooks/useAuth';
@@ -156,7 +156,6 @@ export default function InfoBayarScreen({ navigation: propNavigation }: Props) {
     };
   }, [biayaDefault]);
 
-  const latestPayments = useMemo(() => payments.slice(0, 4), [payments]);
 
   const handleBackPress = () => {
     if (propNavigation?.goBack) {
@@ -198,7 +197,31 @@ export default function InfoBayarScreen({ navigation: propNavigation }: Props) {
       return;
     }
 
+    if (itemId === 'bootcamp') {
+      navigation.navigate('Bootcamp');
+      return;
+    }
+
+    if (itemId === 'kegiatan') {
+      navigation.navigate('Kegiatan');
+      return;
+    }
+
+    if (itemId === 'seminar') {
+      navigation.navigate('Seminar');
+      return;
+    }
+
+    if (itemId === 'mutasi') {
+      navigation.navigate('Mutasi');
+      return;
+    }
+
     console.log('Navigate to payment:', itemId);
+  };
+
+  const handleHistoryPembayaranPress = () => {
+    navigation.navigate('HistoryPembayaran');
   };
 
   const renderPaymentSummary = () => {
@@ -259,7 +282,7 @@ export default function InfoBayarScreen({ navigation: propNavigation }: Props) {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
-          <ArrowLeft color="#000" size={24} />
+          <ChevronLeft color="#000" size={24} />
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>Info Bayar</Text>
@@ -296,7 +319,11 @@ export default function InfoBayarScreen({ navigation: propNavigation }: Props) {
         {/* Carousel */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {/* History Pembayaran Card */}
-          <View style={styles.carouselCard}>
+          <TouchableOpacity 
+            style={styles.carouselCard}
+            onPress={handleHistoryPembayaranPress}
+            activeOpacity={0.7}
+          >
             <Image
               source={require('@images/bg_history_pembayaran.png')}
               style={styles.carouselBackground}
@@ -315,7 +342,7 @@ export default function InfoBayarScreen({ navigation: propNavigation }: Props) {
                 </View>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
 
           <View style={{ width: 10 }} />
 
@@ -386,38 +413,6 @@ export default function InfoBayarScreen({ navigation: propNavigation }: Props) {
             );
           })}
         </View>
-
-        <View style={{ height: 24 }} />
-
-        {/* Riwayat Pembayaran */}
-        {latestPayments.length > 0 ? (
-          <View style={styles.historyContainer}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Riwayat Pembayaran</Text>
-              <Text style={styles.sectionArrow}>➔</Text>
-            </View>
-            <View style={{ height: 12 }} />
-            <View style={styles.historyList}>
-              {latestPayments.map(payment => {
-                const badge = getStatusBadge(payment.status);
-                return (
-                  <View key={payment.id} style={styles.historyItem}>
-                    <View style={styles.historyItemLeft}>
-                      <Text style={styles.historyItemTitle}>{payment.paymentCode || 'Pembayaran Kuliah'}</Text>
-                      <Text style={styles.historyItemSubtitle}>{formatDate(payment.createdAt)}</Text>
-                    </View>
-                    <View style={styles.historyItemRight}>
-                      <Text style={styles.historyItemAmount}>{getPaymentAmount(payment)}</Text>
-                      <View style={[styles.historyStatusBadge, { backgroundColor: badge.background }] }>
-                        <Text style={[styles.historyStatusText, { color: badge.color }]}>{badge.label}</Text>
-                      </View>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        ) : null}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -658,61 +653,6 @@ const styles = StyleSheet.create({
   },
   paymentLabelSelected: {
     color: '#1E69DD',
-  },
-  historyContainer: {
-    marginTop: 16,
-  },
-  historyList: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  historyItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F4F4F4',
-  },
-  historyItemLeft: {
-    flex: 1,
-    marginRight: 12,
-  },
-  historyItemRight: {
-    alignItems: 'flex-end',
-  },
-  historyItemTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#000000',
-  },
-  historyItemSubtitle: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#7A7A7A',
-    marginTop: 2,
-  },
-  historyItemAmount: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#1E69DD',
-  },
-  historyStatusBadge: {
-    marginTop: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 100,
-  },
-  historyStatusText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-SemiBold',
   },
 });
 

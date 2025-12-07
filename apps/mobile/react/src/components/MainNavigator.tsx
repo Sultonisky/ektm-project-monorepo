@@ -6,9 +6,8 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
 import CustomBottomNavigation from './CustomBottomNavigation';
-import QRScannerScreen from '../screens/QRScannerScreen';
 import { 
   EKtmScreen, 
   InfoBayarScreen, 
@@ -22,8 +21,8 @@ interface MainNavigatorProps {
 
 const MainNavigator: React.FC<MainNavigatorProps> = () => {
   const route = useRoute<any>();
+  const navigation = useNavigation<any>();
   const [activeTab, setActiveTab] = useState('ektm');
-  const [showQRScanner, setShowQRScanner] = useState(false);
 
   // Mock navigation props for screens that need them
   const mockNavigation = {} as any;
@@ -31,11 +30,11 @@ const MainNavigator: React.FC<MainNavigatorProps> = () => {
 
   const handleTabPress = (tabKey: string) => {
     setActiveTab(tabKey);
-    setShowQRScanner(false);
   };
 
   const handleQRPress = () => {
-    setShowQRScanner(true);
+    // Navigate directly to Scanner screen
+    navigation.navigate('Scanner');
   };
 
   // Respond to navigation param to set initial/target tab
@@ -43,18 +42,10 @@ const MainNavigator: React.FC<MainNavigatorProps> = () => {
     const tabFromParams = route?.params?.initialTab as string | undefined;
     if (tabFromParams && ['ektm','infobayar','berita','profile'].includes(tabFromParams)) {
       setActiveTab(tabFromParams);
-      setShowQRScanner(false);
     }
   }, [route?.params?.initialTab]);
 
   const renderActiveScreen = () => {
-    if (showQRScanner) {
-      return (
-        <View style={styles.screenContainer}>
-          <QRScannerScreen onClose={() => setShowQRScanner(false)} />
-        </View>
-      );
-    }
 
     switch (activeTab) {
       case 'ektm':

@@ -1,7 +1,7 @@
 import React from 'react';
 import { SafeAreaView, ScrollView, View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 
 const TentangScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -10,7 +10,7 @@ const TentangScreen: React.FC = () => {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <ArrowLeft size={24} color="#333333" />
+          <ChevronLeft size={24} color="#333333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Tentang</Text>
         <View style={{ width: 32 }} />

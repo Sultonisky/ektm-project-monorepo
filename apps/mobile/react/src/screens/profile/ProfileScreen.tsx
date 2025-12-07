@@ -63,8 +63,7 @@ export default function ProfileScreen() {
         navigation.navigate('KampusUBSI');
         break;
       case 'syarat':
-        // Navigate to terms and conditions
-        console.log('Syarat dan Ketentuan');
+        navigation.navigate('SyaratDanKetentuan');
         break;
       case 'tentang':
         // Navigate to Tentang screen

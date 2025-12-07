@@ -1,75 +1,127 @@
 import React, { useEffect, useRef } from 'react';
 import { 
   View, 
-  Text,
   StyleSheet, 
   StatusBar,
-  Animated
+  Animated,
+  Image,
+  Text,
+  Dimensions,
 } from 'react-native';
- 
+import { Fonts } from '../constants/fonts';
+
+const { width, height } = Dimensions.get('window');
 
 type Props = { onFinished?: () => void };
 
 export default function SplashScreen({ onFinished }: Props) {
-  return <AnimatedSplash onFinished={onFinished} />;
-}
-
-// Fallback animated component
-function AnimatedSplash({ onFinished }: { onFinished?: () => void }) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  // Animation values
+  const logoTranslateY = useRef(new Animated.Value(-height)).current;
+  const logoTranslateX = useRef(new Animated.Value(0)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current;
+  const textTranslateX = useRef(new Animated.Value(-100)).current; // Start from far left
+  const poweredByOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
+    // Step 1: Logo drops from top to CENTER (1000ms)
+    // Step 2: Delay (300ms) - logo stays at center
+    // Step 3: Logo slides to left (500ms)
+    // Step 4: Text "BSI.ID" appears from LEFT to RIGHT (500ms)
+    // Step 5: Powered by appears (500ms)
+    // Total: 2800ms + 500ms = 3300ms
+
+    Animated.sequence([
+      // Step 1: Drop from top to CENTER
+      Animated.timing(logoTranslateY, {
+        toValue: 0,
         duration: 1000,
         useNativeDriver: true,
       }),
-      Animated.timing(scaleAnim, {
+      // Step 2: Stay at center for a moment
+      Animated.delay(300),
+      // Step 3: Slide to left
+      Animated.timing(logoTranslateX, {
+        toValue: -65,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      // Step 4: Text appears from LEFT to RIGHT
+      Animated.parallel([
+        Animated.timing(textOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(textTranslateX, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ]),
+      // Step 5: Powered by appears
+      Animated.timing(poweredByOpacity, {
         toValue: 1,
-        duration: 1000,
+        duration: 500,
         useNativeDriver: true,
       }),
     ]).start();
 
+    // Call onFinished after all animations complete + 500ms delay
     const timer = setTimeout(() => {
       if (onFinished) {
         onFinished();
       }
-    }, 3000);
+    }, 3300);
 
     return () => clearTimeout(timer);
-  }, [fadeAnim, scaleAnim, onFinished]);
+  }, [logoTranslateY, logoTranslateX, textOpacity, textTranslateX, poweredByOpacity, onFinished]);
 
   return (
     <View style={styles.container}>
       <StatusBar hidden animated />
-      <View style={styles.backgroundGradient} />
       
+      <View style={styles.contentContainer}>
+        {/* Logo - positioned absolutely to be perfectly centered */}
+        <Animated.View 
+          style={[
+            styles.logoContainer,
+            {
+              transform: [
+                { translateY: logoTranslateY },
+                { translateX: logoTranslateX },
+              ],
+            },
+          ]}
+        >
+          <Image 
+            source={require('../../assets/images/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </Animated.View>
+        
+        {/* Text - positioned absolutely, offset to the right of logo */}
+        <Animated.View
+          style={[
+            styles.textContainer,
+            {
+              opacity: textOpacity,
+              transform: [{ translateX: textTranslateX }],
+            },
+          ]}
+        >
+          <Text style={styles.bsiText}>BSI.ID</Text>
+        </Animated.View>
+      </View>
+
       <Animated.View 
         style={[
-          styles.logoContainer,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }],
-          },
+          styles.poweredByContainer,
+          { opacity: poweredByOpacity },
         ]}
       >
-        <View style={styles.logoPlaceholder}>
-          <Text style={styles.logoText}>EKTM</Text>
-        </View>
-      </Animated.View>
-      
-      <Animated.View style={[styles.loadingContainer, { opacity: fadeAnim }]}>
-        <View style={styles.loadingBar}>
-          <Animated.View 
-            style={[
-              styles.loadingProgress,
-              { transform: [{ scaleX: scaleAnim }] },
-            ]} 
-          />
-        </View>
+        <Text style={styles.poweredByText}>Powered By :</Text>
+        <Text style={styles.pembangunText}>Pembangun Negeri</Text>
       </Animated.View>
     </View>
   );
@@ -78,67 +130,54 @@ function AnimatedSplash({ onFinished }: { onFinished?: () => void }) {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#000',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  video: {
-    // unused in dummy splash
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  contentContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  backgroundGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#75ABFF', // Your brand color as fallback
+    width: '100%',
   },
   logoContainer: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 100,
+    left: width / 2 - 50, // Center of screen minus half of logo width
   },
-  logoPlaceholder: {
-    width: 120,
-    height: 120,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+  logo: {
+    width: 100,
+    height: 100,
   },
-  logoText: {
-    fontSize: 32,
-    fontFamily: 'Poppins-Bold',
-    color: 'white',
+  textContainer: {
+    position: 'absolute',
+    left: width / 2 - 50 - 65 + 100 + 15, // Logo final position + logo width + margin
+    // Calculation: (width/2 - 50) is logo center, -65 is shift left, +100 is logo width, +15 is margin
+  },
+  bsiText: {
+    fontSize: 48,
+    fontFamily: Fonts.bold,
+    color: '#020E60',
     letterSpacing: 2,
   },
-  loadingContainer: {
+  poweredByContainer: {
     position: 'absolute',
-    bottom: 100,
-    left: 50,
-    right: 50,
+    bottom: 50,
+    alignItems: 'center',
   },
-  loadingBar: {
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 2,
-    overflow: 'hidden',
+  poweredByText: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: '#666666',
+    marginBottom: 4,
   },
-  loadingProgress: {
-    height: '100%',
-    backgroundColor: 'white',
-    borderRadius: 2,
+  pembangunText: {
+    fontSize: 16,
+    fontFamily: Fonts.semiBold,
+    color: '#020E60',
   },
 });
 

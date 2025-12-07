@@ -125,7 +125,7 @@ monorepo-ektm/
 ### Prerequisites
 - **Node.js**: 20.0.0 atau lebih tinggi (18+ untuk backend, 20+ untuk mobile)
 - **pnpm**: 8.0.0 atau lebih tinggi
-- **PostgreSQL**: 13+ dengan database `ektm_ubsi`
+- **PostgreSQL**: 13+ dengan database `ektm_db` (atau sesuai konfigurasi di `.env`)
 - **Git**: untuk cloning repository
 
 **Untuk Mobile Development:**
@@ -152,7 +152,7 @@ pnpm install
 **Backend** (`apps/backend/nestjs/.env`):
 ```env
 # Database
-DATABASE_URL="postgresql://username:password@localhost:5432/ektm_ubsi"
+DATABASE_URL="postgresql://username:password@localhost:5432/ektm_db?schema=public"
 
 # JWT
 JWT_SECRET="your-super-secret-jwt-key"

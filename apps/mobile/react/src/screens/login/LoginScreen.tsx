@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Eye, EyeOff, ScanFace } from 'lucide-react-native';
+import { ChevronLeft, Eye, EyeOff, ScanFace } from 'lucide-react-native';
 
 type Props = { 
   onSubmit?: (nim: string, password: string) => void;
@@ -34,7 +34,7 @@ export default function LoginScreen({ onSubmit, onBack, loading = false, errorMe
       {/* Navigation Header */}
       <View style={styles.navigationHeader}>
         <TouchableOpacity style={styles.backButton} onPress={onBack} disabled={loading}>
-          <ArrowLeft size={20} color="#000000" />
+          <ChevronLeft size={20} color="#000000" />
         </TouchableOpacity>
         <Text style={styles.navigationTitle}>Login</Text>
         <View style={styles.headerIcon}>

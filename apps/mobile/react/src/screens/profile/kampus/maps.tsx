@@ -7,15 +7,18 @@ import {
   TouchableOpacity,
   Image,
   Linking,
+  ActivityIndicator,
+  SafeAreaView,
   Platform,
   PermissionsAndroid,
-  ActivityIndicator,
-  FlatList,
 } from 'react-native';
-import MapView, { Marker, UrlTile, PROVIDER_DEFAULT, LatLng, Region } from 'react-native-maps';
-import Geolocation, { GeolocationError, GeolocationResponse } from 'react-native-geolocation-service';
+import MapLibreGL from '@maplibre/maplibre-react-native';
+import Geolocation from 'react-native-geolocation-service';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft, Navigation2, Phone, Mail, Crosshair } from 'lucide-react-native';
+import { ChevronLeft, Navigation2, Phone, Mail, Crosshair } from 'lucide-react-native';
+
+// Set MapLibre access token (not required for self-hosted tiles, but needed to initialize)
+MapLibreGL.setAccessToken(null);
 
 type CampusLocation = {
   name: string;
@@ -35,7 +38,7 @@ const ALL_CAMPUSES: CampusLocation[] = [
     latitude: -6.186486,
     longitude: 106.849979,
     image: require('@images/Kramat98.png'),
-    mapsUrl: 'https://maps.app.goo.gl/QLJb4hC94D1HmMBt7',
+    mapsUrl: 'https://www.openstreetmap.org/?mlat=-6.186486&mlon=106.849979#map=18/-6.186486/106.849979',
     phone: '0211234567',
     email: 'info.kramat98@ubsi.ac.id',
   },
@@ -45,7 +48,7 @@ const ALL_CAMPUSES: CampusLocation[] = [
     latitude: -6.263265,
     longitude: 106.864601,
     image: require('@images/SartikaA.png'),
-    mapsUrl: 'https://maps.app.goo.gl/vgsUfTf5R8VZpxwY6',
+    mapsUrl: 'https://www.openstreetmap.org/?mlat=-6.263265&mlon=106.864601#map=18/-6.263265/106.864601',
     phone: '0212345678',
     email: 'info.sartikaa@ubsi.ac.id',
   },
@@ -55,7 +58,7 @@ const ALL_CAMPUSES: CampusLocation[] = [
     latitude: -6.200484,
     longitude: 106.797282,
     image: require('@images/Slipi.png'),
-    mapsUrl: 'https://maps.app.goo.gl/43e9HKy2ftbV9FB56',
+    mapsUrl: 'https://www.openstreetmap.org/?mlat=-6.200484&mlon=106.797282#map=18/-6.200484/106.797282',
     phone: '0213456789',
     email: 'info.slipi@ubsi.ac.id',
   },
@@ -65,7 +68,7 @@ const ALL_CAMPUSES: CampusLocation[] = [
     latitude: -6.263265,
     longitude: 106.864601,
     image: require('@images/SartikaB.png'),
-    mapsUrl: 'https://maps.app.goo.gl/pT3cNZdksdEvY4wB7',
+    mapsUrl: 'https://www.openstreetmap.org/?mlat=-6.263265&mlon=106.864601#map=18/-6.263265/106.864601',
     phone: '0214567890',
     email: 'info.sartikab@ubsi.ac.id',
   },
@@ -73,45 +76,118 @@ const ALL_CAMPUSES: CampusLocation[] = [
 
 const { width, height } = Dimensions.get('window');
 
-export default function MapsKampusScreen() {
-  const navigation = useNavigation<any>();
-  const mapRef = useRef<MapView | null>(null);
-  const listRef = useRef<FlatList<CampusLocation> | null>(null);
+// OpenStreetMap style configuration for MapLibre
+const OSM_STYLE = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap Contributors',
+      maxzoom: 19,
+    },
+  },
+  layers: [
+    {
+      id: 'osm',
+      type: 'raster',
+      source: 'osm',
+      minzoom: 0,
+      maxzoom: 22,
+    },
+  ],
+};
 
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
+export default function MapsKampusScreen({ route }: any) {
+  const navigation = useNavigation<any>();
+  const cameraRef = useRef<any>(null);
+  const mapRef = useRef<any>(null);
+
+  const initialIndex = route?.params?.campusIndex ?? 0;
+  const [currentIndex, setCurrentIndex] = useState<number>(initialIndex);
   const [isMapLoading, setIsMapLoading] = useState<boolean>(true);
   const [mapError, setMapError] = useState<string | null>(null);
-  const [useFallbackTiles, setUseFallbackTiles] = useState<boolean>(false);
+  const [isMapReady, setIsMapReady] = useState<boolean>(false);
 
-  const [currentPosition, setCurrentPosition] = useState<LatLng | null>(null);
+  const [currentPosition, setCurrentPosition] = useState<[number, number] | null>(null);
   const [isLocationLoading, setIsLocationLoading] = useState<boolean>(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
-  const campus = ALL_CAMPUSES[currentIndex];
+  // Camera state for controlling view
+  const [cameraConfig, setCameraConfig] = useState<{
+    centerCoordinate: [number, number];
+    zoomLevel: number;
+  }>({
+    centerCoordinate: [ALL_CAMPUSES[initialIndex].longitude, ALL_CAMPUSES[initialIndex].latitude],
+    zoomLevel: 17,
+  });
+
+  // Safety check for campus index
+  const validIndex = currentIndex >= 0 && currentIndex < ALL_CAMPUSES.length ? currentIndex : 0;
+  const campus = ALL_CAMPUSES[validIndex];
+
+  // If campus is undefined, show error
+  if (!campus) {
+    return (
+      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={styles.errorTitle}>Kampus tidak ditemukan</Text>
+        <TouchableOpacity 
+          style={[styles.retryBtn, { marginTop: 16 }]} 
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.retryText}>Kembali</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   useEffect(() => {
-    const t = setTimeout(() => setIsMapLoading(false), 500);
+    console.log('MapsKampusScreen mounted with campus:', campus?.name);
+    const t = setTimeout(() => setIsMapLoading(false), 1000);
     return () => clearTimeout(t);
   }, []);
 
+  useEffect(() => {
+    console.log('Current campus changed to:', campus?.name, 'Index:', validIndex);
+    // Update camera when campus changes
+    if (campus) {
+      setCameraConfig({
+        centerCoordinate: [campus.longitude, campus.latitude],
+        zoomLevel: 17,
+      });
+    }
+  }, [campus, validIndex]);
+
   const requestLocationPermission = useCallback(async () => {
     try {
-      setIsLocationLoading(true);
       setLocationError(null);
-
+      console.log('Requesting location permission...');
+      
       if (Platform.OS === 'android') {
         const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: 'Izin Lokasi',
+            message: 'Aplikasi memerlukan akses lokasi untuk menampilkan posisi Anda',
+            buttonNeutral: 'Tanya Nanti',
+            buttonNegative: 'Batal',
+            buttonPositive: 'OK',
+          },
         );
+        
+        console.log('Permission status:', granted);
+        
         if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
           setLocationError('Izin lokasi ditolak.');
           setIsLocationLoading(false);
           return false;
         }
       }
-      // iOS: permission handled by Geolocation or Info.plist; assume configured
+      
       return true;
     } catch (e) {
+      console.error('Permission request error:', e);
       setLocationError(`Gagal meminta izin lokasi: ${e}`);
       setIsLocationLoading(false);
       return false;
@@ -119,60 +195,99 @@ export default function MapsKampusScreen() {
   }, []);
 
   const getCurrentLocation = useCallback(async () => {
-    const ok = await requestLocationPermission();
-    if (!ok) return;
-    setIsLocationLoading(true);
-    Geolocation.getCurrentPosition(
-      (pos: GeolocationResponse) => {
-        const coords: LatLng = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-        setCurrentPosition(coords);
-        setIsLocationLoading(false);
-        setLocationError(null);
-        showBothLocations(coords, ALL_CAMPUSES[currentIndex]);
-      },
-      (error: GeolocationError) => {
-        setLocationError(`Gagal mendapatkan lokasi saat ini: ${error.message}`);
-        setIsLocationLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  }, [currentIndex, requestLocationPermission]);
-
-  const showBothLocations = (me: LatLng | null, target: CampusLocation) => {
-    if (!mapRef.current) return;
-    if (me) {
-      const center: LatLng = {
-        latitude: (me.latitude + target.latitude) / 2,
-        longitude: (me.longitude + target.longitude) / 2,
-      };
-      mapRef.current.animateCamera({ center, zoom: 15 }, { duration: 600 });
-    } else {
-      mapRef.current.animateCamera(
-        { center: { latitude: target.latitude, longitude: target.longitude }, zoom: 17 },
-        { duration: 600 }
+    try {
+      console.log('getCurrentLocation called, map ready:', isMapReady);
+      
+      if (!isMapReady) {
+        setLocationError('Peta belum siap, coba lagi');
+        return;
+      }
+      
+      const ok = await requestLocationPermission();
+      console.log('Permission result:', ok);
+      
+      if (!ok) {
+        console.log('Permission not granted, returning');
+        return;
+      }
+      
+      setIsLocationLoading(true);
+      setLocationError(null);
+      
+      console.log('Getting current position with geolocation...');
+      
+      Geolocation.getCurrentPosition(
+        (position) => {
+          console.log('Position received:', position.coords);
+          const coords: [number, number] = [position.coords.longitude, position.coords.latitude];
+          console.log('Formatted coords:', coords);
+          
+          setCurrentPosition(coords);
+          setLocationError(null);
+          
+          // Update camera to show both locations
+          const validIdx = currentIndex >= 0 && currentIndex < ALL_CAMPUSES.length ? currentIndex : 0;
+          const target = ALL_CAMPUSES[validIdx];
+          
+          if (!target) {
+            console.error('Target campus not found');
+            setIsLocationLoading(false);
+            return;
+          }
+          
+          console.log('Target campus:', target.name);
+          
+          const centerLng = (coords[0] + target.longitude) / 2;
+          const centerLat = (coords[1] + target.latitude) / 2;
+          
+          console.log('Setting camera to:', { centerLng, centerLat });
+          
+          setCameraConfig({
+            centerCoordinate: [centerLng, centerLat],
+            zoomLevel: 15,
+          });
+          
+          setIsLocationLoading(false);
+          console.log('Location update complete');
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          let errorMsg = 'Gagal mendapatkan lokasi';
+          
+          if (error.code === 1) {
+            errorMsg = 'Izin lokasi ditolak';
+          } else if (error.code === 2) {
+            errorMsg = 'Lokasi tidak tersedia. Pastikan GPS aktif.';
+          } else if (error.code === 3) {
+            errorMsg = 'Timeout. Coba lagi.';
+          } else {
+            errorMsg = `Error: ${error.message}`;
+          }
+          
+          setLocationError(errorMsg);
+          setIsLocationLoading(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 10000,
+        }
       );
+    } catch (error: any) {
+      console.error('Error in getCurrentLocation:', error);
+      setLocationError(`Gagal mendapatkan lokasi: ${error.message || 'Unknown error'}`);
+      setIsLocationLoading(false);
     }
-  };
+  }, [currentIndex, requestLocationPermission, isMapReady]);
 
   const moveToCampus = useCallback((idx: number) => {
     const c = ALL_CAMPUSES[idx];
-    if (mapRef.current) {
-      mapRef.current.animateCamera(
-        { center: { latitude: c.latitude, longitude: c.longitude }, zoom: 17 },
-        { duration: 500 }
-      );
-    }
+    setCurrentIndex(idx);
+    setCameraConfig({
+      centerCoordinate: [c.longitude, c.latitude],
+      zoomLevel: 17,
+    });
   }, []);
-
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
-    if (viewableItems && viewableItems.length > 0) {
-      const idx = viewableItems[0].index ?? 0;
-      setCurrentIndex(idx);
-      moveToCampus(idx);
-    }
-  }).current;
-
-  const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 60 });
 
   const openExternal = (url: string) => Linking.openURL(url).catch(() => {});
   const callPhone = (phone?: string | null) => phone && Linking.openURL(`tel:${phone}`).catch(() => {});
@@ -181,10 +296,10 @@ export default function MapsKampusScreen() {
   const distanceText = useMemo(() => {
     if (!currentPosition) return null;
     const R = 6371000; // meters
-    const dLat = toRad(campus.latitude - currentPosition.latitude);
-    const dLon = toRad(campus.longitude - currentPosition.longitude);
+    const dLat = toRad(campus.latitude - currentPosition[1]);
+    const dLon = toRad(campus.longitude - currentPosition[0]);
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(currentPosition.latitude)) * Math.cos(toRad(campus.latitude)) *
+      Math.cos(toRad(currentPosition[1])) * Math.cos(toRad(campus.latitude)) *
       Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const d = R * c;
@@ -192,142 +307,150 @@ export default function MapsKampusScreen() {
   }, [currentPosition, campus]);
 
   return (
-    <View style={styles.root}>
-      <MapView
-        ref={(ref: MapView | null) => { mapRef.current = ref; }}
-        style={StyleSheet.absoluteFill}
-        provider={PROVIDER_DEFAULT}
-        initialRegion={regionFromPoint(campus.latitude, campus.longitude, 17)}
-        onMapReady={() => setIsMapLoading(false)}
-        onError={() => setMapError('Gagal memuat peta')}
-      >
-        <UrlTile
-          urlTemplate={useFallbackTiles
-            ? 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png'
-            : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'}
-          maximumZ={19}
-          flipY={false}
-          zIndex={-1}
-        />
+    <SafeAreaView style={styles.root}>
+      <View style={{ flex: 1 }}>
+        <MapLibreGL.MapView
+          ref={mapRef}
+          style={StyleSheet.absoluteFill}
+          // @ts-ignore - styleURL is supported but types may not be updated
+          styleURL={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(OSM_STYLE))}`}
+          onDidFinishLoadingMap={() => {
+            console.log('Map ready!');
+            setIsMapLoading(false);
+            setIsMapReady(true);
+          }}
+          onDidFailLoadingMap={() => {
+            console.error('Map error');
+            setMapError('Gagal memuat peta');
+          }}
+          logoEnabled={false}
+          attributionEnabled={true}
+          attributionPosition={{ bottom: 8, right: 8 }}
+        >
+          <MapLibreGL.Camera
+            ref={cameraRef}
+            zoomLevel={cameraConfig.zoomLevel}
+            centerCoordinate={cameraConfig.centerCoordinate}
+            animationMode="flyTo"
+            animationDuration={1000}
+          />
 
-        <Marker coordinate={{ latitude: campus.latitude, longitude: campus.longitude }}>
-          <View style={[styles.marker, { backgroundColor: '#1E69DD' }]} />
-        </Marker>
+          {/* Campus Marker */}
+          <MapLibreGL.PointAnnotation
+            id="campus-marker"
+            coordinate={[campus.longitude, campus.latitude]}
+          >
+            <View style={styles.markerPin}>
+              <View style={styles.markerDot} />
+            </View>
+          </MapLibreGL.PointAnnotation>
 
-        {currentPosition ? (
-          <Marker coordinate={currentPosition}>
-            <View style={[styles.marker, { backgroundColor: 'green' }]} />
-          </Marker>
-        ) : null}
-      </MapView>
-
-      {/* Back button */}
-      <View style={styles.topRow}>
-        <TouchableOpacity style={styles.fabCircle} onPress={() => navigation.goBack()}>
-          <ArrowLeft color="#000" size={20} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.fabCircle} onPress={() => {
-          if (!isLocationLoading) {
-            getCurrentLocation();
-          }
-        }}>
-          {isLocationLoading ? (
-            <ActivityIndicator size="small" color="#1E69DD" />
-          ) : (
-            <Crosshair color={currentPosition ? 'green' : '#888'} size={20} />
+          {/* User Location Marker */}
+          {currentPosition && (
+            <MapLibreGL.PointAnnotation
+              id="user-location"
+              coordinate={currentPosition}
+            >
+              <View style={[styles.marker, { backgroundColor: 'green' }]} />
+            </MapLibreGL.PointAnnotation>
           )}
-        </TouchableOpacity>
-      </View>
+        </MapLibreGL.MapView>
 
-      {/* Open in Google Maps */}
-      <View style={styles.openMapsWrap}>
-        <TouchableOpacity style={styles.openMapsBtn} onPress={() => openExternal(campus.mapsUrl)}>
-          <Navigation2 color="#1E69DD" size={18} />
-          <View style={{ width: 8 }} />
-          <Text style={styles.openMapsText}>Buka di Google Maps</Text>
-        </TouchableOpacity>
-      </View>
+        {/* Top buttons */}
+        <View style={styles.topRow}>
+          <TouchableOpacity style={styles.fabCircle} onPress={() => navigation.goBack()}>
+            <ChevronLeft color="#000" size={20} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.fabCircle}
+            onPress={() => {
+              if (!isLocationLoading) {
+                getCurrentLocation();
+              }
+            }}
+          >
+            {isLocationLoading ? (
+              <ActivityIndicator size="small" color="#1E69DD" />
+            ) : (
+              <Crosshair color={currentPosition ? 'green' : '#888'} size={20} />
+            )}
+          </TouchableOpacity>
+        </View>
 
-      {/* Bottom carousel */}
-      <View style={styles.bottomPanel}>
-        <FlatList
-          ref={ref => (listRef.current = ref as any)}
-          data={ALL_CAMPUSES}
-          keyExtractor={(item) => item.name}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={width * 0.9}
-          decelerationRate="fast"
-          contentContainerStyle={{ paddingHorizontal: width * 0.05 }}
-          renderItem={({ item, index }) => (
-            <View style={[styles.card, { width: width * 0.9, marginRight: index === ALL_CAMPUSES.length - 1 ? 0 : 10 }]}> 
-              <Image
-                source={item.image}
-                style={styles.cardImage}
-                resizeMode="cover"
-              />
-              <View style={styles.cardContent}>
-                <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
-                <View style={{ height: 4 }} />
-                <Text style={styles.cardAddress} numberOfLines={2}>{item.address}</Text>
-                <View style={{ height: 8 }} />
-                {currentPosition ? (
-                  <View style={styles.distanceChip}>
-                    <Text style={styles.distanceText}>{distanceText}</Text>
-                  </View>
-                ) : locationError ? (
-                  <View style={styles.locationWarn}>
-                    <Text style={styles.locationWarnText} numberOfLines={1}>Lokasi tidak tersedia</Text>
-                  </View>
-                ) : null}
-                <View style={{ height: 10 }} />
-                <View style={styles.actionsRow}>
-                  <TouchableOpacity style={styles.actionBtn} onPress={() => callPhone(item.phone)}>
-                    <Phone color="#1E69DD" size={18} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionBtn} onPress={() => sendEmail(item.email)}>
-                    <Mail color="#1E69DD" size={18} />
-                  </TouchableOpacity>
-                </View>
+        {/* Bottom card */}
+        <View style={styles.bottomCard}>
+          {/* Campus Image with Tint */}
+          <View style={styles.imageSection}>
+            <Image source={campus.image} style={styles.campusImage} resizeMode="cover" />
+            <View style={styles.blueTint} />
+          </View>
+
+          {/* Campus Info */}
+          <View style={styles.infoSection}>
+            {/* Title and Action Buttons Row */}
+            <View style={styles.titleRow}>
+              <Text style={styles.campusTitle}>{campus.name}</Text>
+              <View style={styles.iconButtons}>
+                <TouchableOpacity style={styles.iconBtn} onPress={() => callPhone(campus.phone)}>
+                  <Phone color="#FFFFFF" size={16} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.iconBtn} onPress={() => sendEmail(campus.email)}>
+                  <Mail color="#FFFFFF" size={16} />
+                </TouchableOpacity>
               </View>
             </View>
-          )}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={viewConfigRef.current}
-        />
-      </View>
 
-      {isMapLoading ? (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#1E69DD" />
-          <View style={{ height: 8 }} />
-          <Text style={styles.loadingText}>Memuat peta...</Text>
-        </View>
-      ) : null}
+            {/* Address */}
+            <Text style={styles.campusAddress} numberOfLines={2}>
+              {campus.address}
+            </Text>
 
-      {mapError ? (
-        <View style={styles.errorOverlay}>
-          <Text style={styles.errorTitle}>Gagal memuat peta</Text>
-          <View style={{ height: 6 }} />
-          <Text style={styles.errorText}>{mapError}</Text>
-          <View style={{ height: 10 }} />
-          <View style={{ flexDirection: 'row' }}>
-            <TouchableOpacity style={styles.retryBtn} onPress={() => {
-              setIsMapLoading(true);
-              setMapError(null);
-              setTimeout(() => setIsMapLoading(false), 500);
-            }}>
-              <Text style={styles.retryText}>Coba Lagi</Text>
-            </TouchableOpacity>
-            <View style={{ width: 10 }} />
-            <TouchableOpacity style={styles.retryBtn} onPress={() => setUseFallbackTiles(true)}>
-              <Text style={styles.retryText}>Gunakan Peta Alternatif</Text>
+            {/* Navigate Button */}
+            <TouchableOpacity style={styles.navigateBtn} onPress={() => openExternal(campus.mapsUrl)}>
+              <Navigation2 color="#F0F0F0" size={16} />
+              <Text style={styles.navigateText}>Arahkan</Text>
             </TouchableOpacity>
           </View>
         </View>
-      ) : null}
-    </View>
+
+        {isMapLoading ? (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color="#1E69DD" />
+            <View style={{ height: 8 }} />
+            <Text style={styles.loadingText}>Memuat peta...</Text>
+          </View>
+        ) : null}
+
+        {mapError ? (
+          <View style={styles.errorOverlay}>
+            <Text style={styles.errorTitle}>Gagal memuat peta</Text>
+            <View style={{ height: 6 }} />
+            <Text style={styles.errorText}>{mapError}</Text>
+            <View style={{ height: 10 }} />
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={() => {
+                setIsMapLoading(true);
+                setMapError(null);
+                setTimeout(() => setIsMapLoading(false), 500);
+              }}
+            >
+              <Text style={styles.retryText}>Coba Lagi</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {/* Location Error Notification */}
+        {locationError && !isLocationLoading ? (
+          <View style={styles.locationErrorBar}>
+            <Text style={styles.locationErrorText}>{locationError}</Text>
+            <TouchableOpacity onPress={() => setLocationError(null)}>
+              <Text style={styles.dismissText}>Tutup</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -335,46 +458,242 @@ function toRad(deg: number) {
   return (deg * Math.PI) / 180;
 }
 
-function regionFromPoint(lat: number, lon: number, zoom: number): Region {
-  const latitudeDelta = Math.exp(Math.log(360) - zoom * Math.LN2);
-  const longitudeDelta = latitudeDelta * (width / height);
-  return { latitude: lat, longitude: lon, latitudeDelta, longitudeDelta };
-}
-
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#fff' },
-  topRow: { position: 'absolute', top: 24, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' },
-  fabCircle: { backgroundColor: '#fff', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', elevation: 2 },
+  root: {
+    flex: 1,
+    backgroundColor: '#F0F0F0',
+  },
 
-  openMapsWrap: { position: 'absolute', top: 84, left: 0, right: 0, alignItems: 'center' },
-  openMapsBtn: { backgroundColor: '#fff', borderRadius: 24, paddingVertical: 10, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', elevation: 2 },
-  openMapsText: { color: '#1E69DD', fontFamily: 'Poppins-SemiBold' },
+  topRow: {
+    position: 'absolute',
+    top: 82,
+    left: 32,
+    right: 32,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    zIndex: 10,
+  },
 
-  bottomPanel: { position: 'absolute', left: 0, right: 0, bottom: 18 },
-  card: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden', elevation: 3 },
-  cardImage: { width: width * 0.25, height: 140 },
-  cardContent: { flex: 1, padding: 14, justifyContent: 'center' },
-  cardTitle: { fontSize: 16, fontFamily: 'Poppins-Bold', color: '#000' },
-  cardAddress: { fontSize: 12, fontFamily: 'Poppins-Regular', color: '#111' },
+  fabCircle: {
+    backgroundColor: '#FFFFFF',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 4,
+  },
 
-  distanceChip: { alignSelf: 'flex-start', backgroundColor: 'rgba(76,175,80,0.12)', borderColor: 'rgba(76,175,80,0.3)', borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 },
-  distanceText: { color: '#2e7d32', fontSize: 12, fontFamily: 'Poppins-SemiBold' },
-  locationWarn: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,152,0,0.12)', borderColor: 'rgba(255,152,0,0.3)', borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 },
-  locationWarnText: { color: '#e65100', fontSize: 12, fontFamily: 'Poppins-Regular' },
+  bottomCard: {
+    position: 'absolute',
+    bottom: 36,
+    left: 47,
+    right: 47,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 19,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 8,
+    overflow: 'hidden',
+  },
 
-  actionsRow: { flexDirection: 'row' },
-  actionBtn: { backgroundColor: 'rgba(30,105,221,0.08)', width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  imageSection: {
+    width: '100%',
+    height: 180,
+    position: 'relative',
+    overflow: 'hidden',
+  },
 
-  marker: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: '#fff' },
+  campusImage: {
+    width: '100%',
+    height: '100%',
+  },
 
-  loadingOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { color: '#666', fontFamily: 'Poppins-Regular' },
+  blueTint: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#89D3F3',
+    opacity: 0.35,
+  },
 
-  errorOverlay: { position: 'absolute', left: 16, right: 16, top: height * 0.25, backgroundColor: '#fff', borderRadius: 12, padding: 16, alignItems: 'center', elevation: 3 },
-  errorTitle: { color: '#000', fontFamily: 'Poppins-Bold' },
-  errorText: { color: '#333', fontFamily: 'Poppins-Regular', textAlign: 'center' },
-  retryBtn: { backgroundColor: '#1E69DD', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
-  retryText: { color: '#fff', fontFamily: 'Poppins-SemiBold' },
+  infoSection: {
+    padding: 24,
+    gap: 12,
+  },
+
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  campusTitle: {
+    fontSize: 19,
+    fontFamily: 'Montserrat',
+    fontWeight: '600',
+    color: '#000000',
+    flex: 1,
+  },
+
+  iconButtons: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+
+  iconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#1E69DD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  campusAddress: {
+    fontSize: 10,
+    fontFamily: 'Montserrat',
+    fontWeight: '500',
+    color: '#000000',
+    lineHeight: 12,
+  },
+
+  navigateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E69DD',
+    borderRadius: 100,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+
+  navigateText: {
+    fontSize: 14,
+    fontFamily: 'Montserrat',
+    fontWeight: '500',
+    color: '#F0F0F0',
+  },
+
+  markerPin: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2728D1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  markerDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+  },
+
+  marker: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+
+  loadingOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(240, 240, 240, 0.8)',
+  },
+
+  loadingText: {
+    color: '#666',
+    fontFamily: 'Montserrat',
+    fontWeight: '500',
+  },
+
+  errorOverlay: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: height * 0.25,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    elevation: 3,
+  },
+
+  errorTitle: {
+    color: '#000',
+    fontFamily: 'Montserrat',
+    fontWeight: '600',
+  },
+
+  errorText: {
+    color: '#333',
+    fontFamily: 'Montserrat',
+    fontWeight: '400',
+    textAlign: 'center',
+  },
+
+  retryBtn: {
+    backgroundColor: '#1E69DD',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+
+  retryText: {
+    color: '#fff',
+    fontFamily: 'Montserrat',
+    fontWeight: '600',
+  },
+
+  locationErrorBar: {
+    position: 'absolute',
+    top: 140,
+    left: 16,
+    right: 16,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+
+  locationErrorText: {
+    color: '#fff',
+    fontFamily: 'Montserrat',
+    fontWeight: '500',
+    fontSize: 12,
+    flex: 1,
+    marginRight: 8,
+  },
+
+  dismissText: {
+    color: '#fff',
+    fontFamily: 'Montserrat',
+    fontWeight: '700',
+    fontSize: 12,
+  },
 });
-
-

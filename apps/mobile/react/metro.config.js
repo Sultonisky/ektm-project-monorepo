@@ -13,8 +13,13 @@ const monorepoRoot = path.resolve(projectRoot, '../../..');
 const config = {
   watchFolders: [
     path.resolve(monorepoRoot, 'packages'),
+    path.resolve(monorepoRoot, 'node_modules'),
   ],
   resolver: {
+    nodeModulesPaths: [
+      path.resolve(projectRoot, 'node_modules'),
+      path.resolve(monorepoRoot, 'node_modules'),
+    ],
     alias: {
       '@monorepo-ektm/types': path.resolve(monorepoRoot, 'packages/types'),
       '@monorepo-ektm/utils': path.resolve(monorepoRoot, 'packages/utils'),

@@ -11,15 +11,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, Files, IdCard } from 'lucide-react-native';
+import { ChevronLeft, Files, IdCard } from 'lucide-react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { paymentService } from '../../../services/api';
 import { bankImages } from '../../../constants/bank';
-// Clipboard optional dependency; fallback to no-op in dev
-let Clipboard: { setString: (text: string) => void } = { setString: () => {} };
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  Clipboard = require('@react-native-clipboard/clipboard').default;
-} catch {}
 
 type MidtransAction = { name: string; method: string; url: string };
 
@@ -53,7 +48,7 @@ export default function MenungguPembayaranScreen() {
   const params: RouteParams = route?.params ?? {};
 
   const [bankKey, setBankKey] = useState<RouteParams['bankKey']>(params?.bankKey ?? 'bca');
-  const [currentVaNumber, setCurrentVaNumber] = useState(params?.invoiceId ?? '1234567890954322376');
+  const [currentVaNumber, setCurrentVaNumber] = useState(params?.invoiceId ?? '');
   const [currentStatus, setCurrentStatus] = useState<string>((params?.status ?? 'pending').toLowerCase());
   const [paymentUrl, setPaymentUrl] = useState<string | undefined>(
     () => params?.midtransPaymentUrl || params?.midtransActions?.find(action => action.url)?.url,
@@ -121,9 +116,18 @@ export default function MenungguPembayaranScreen() {
     ]).start(() => setShowingToast(false));
   };
 
-  const copyVA = () => {
-    Clipboard.setString(currentVaNumber);
-    showToast();
+  const copyVA = async () => {
+    if (!currentVaNumber) {
+      return;
+    }
+    try {
+      await Clipboard.setString(currentVaNumber);
+      showToast();
+    } catch (error) {
+      console.error('Failed to copy VA number:', error);
+      // Still show toast even if there's an error (for better UX)
+      showToast();
+    }
   };
 
   const handleOpenPaymentLink = async () => {
@@ -178,7 +182,7 @@ export default function MenungguPembayaranScreen() {
         setPollError(null);
 
         if (normalizedStatus === 'lunas') {
-          const successInvoice = updatedVa || payment.midtransBillKey || params.invoiceId || '1234567890954322376';
+          const successInvoice = updatedVa || payment.midtransBillKey || params.invoiceId || '';
           const successBankKey = updatedBankKey ?? params.bankKey ?? 'bca';
 
           clearInterval(interval);
@@ -222,7 +226,7 @@ export default function MenungguPembayaranScreen() {
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBackPress} style={styles.backButton} activeOpacity={0.7}>
           <View style={styles.backButtonCircle}>
-            <ArrowLeft size={18} color="#000000" />
+            <ChevronLeft size={18} color="#000000" />
           </View>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Rincian Pembayaran</Text>
@@ -234,12 +238,18 @@ export default function MenungguPembayaranScreen() {
         <View style={styles.bannerContainer}>
           <Image source={require('@images/frame_wait.png')} style={styles.bannerImage} />
           <Text style={styles.bannerSubtitle}>Virtual Account Number</Text>
-          <View style={styles.vaRow}>
-            <Text style={styles.vaNumber}>{currentVaNumber}</Text>
-            <TouchableOpacity onPress={copyVA} activeOpacity={0.8}>
-              <Files size={24} color="#000000" />
-            </TouchableOpacity>
-          </View>
+          {currentVaNumber ? (
+            <View style={styles.vaRow}>
+              <Text style={styles.vaNumber}>{currentVaNumber}</Text>
+              <TouchableOpacity onPress={copyVA} activeOpacity={0.8}>
+                <Files size={24} color="#000000" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.vaRow}>
+              <Text style={styles.vaNumberLoading}>Memuat VA number...</Text>
+            </View>
+          )}
           <View style={[styles.statusBadge, { backgroundColor: statusInfo.background }] }>
             <Text style={[styles.statusBadgeText, { color: statusInfo.color }]}>{statusInfo.label}</Text>
           </View>
@@ -345,6 +355,7 @@ const styles = StyleSheet.create({
   bannerSubtitle: { marginTop: 12, fontSize: 12, color: '#707070', fontFamily: 'Poppins-Medium' },
   vaRow: { marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 10 },
   vaNumber: { fontSize: 20, fontFamily: 'Poppins-Bold', color: '#000000' },
+  vaNumberLoading: { fontSize: 16, fontFamily: 'Poppins-Medium', color: '#707070', fontStyle: 'italic' },
   statusBadge: {
     marginTop: 12,
     paddingHorizontal: 16,

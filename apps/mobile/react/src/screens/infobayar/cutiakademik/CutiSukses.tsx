@@ -6,10 +6,11 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { CheckCircle } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../navigation/AppNavigator';
 
@@ -23,37 +24,38 @@ interface Props {
 export default function CutiSukses({ navigation: propNavigation, route }: Props) {
   const navigation = useNavigation<NavigationProp>();
 
+  const handleBackPress = () => {
+    if (propNavigation?.goBack) {
+      propNavigation.goBack();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
+
   const handleBackToHome = () => {
     navigation.navigate('Main');
   };
 
-  const handleBackToCutiAkademik = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('CutiAkademik');
-    }
+  const handleViewHistory = () => {
+    // Navigate to history/riwayat cuti
+    navigation.navigate('HistoryCuti');
   };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#75ABFF" translucent />
+    
       
-      {/* Header with Blue Background */}
-      <View style={styles.header}>
-        <SafeAreaView edges={['top']} style={styles.safeAreaHeader}>
-          <View style={styles.headerContent}>
-            <TouchableOpacity 
-              onPress={handleBackToCutiAkademik} 
-              style={styles.backButton}
-            >
-              <Text style={styles.backButtonText}>←</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.headerSpacer} />
-          </View>
-        </SafeAreaView>
-      </View>
+      {/* Header with Back Button */}
+      <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
+            <ChevronLeft color="#000000" size={24} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Form pengajuan cuti</Text>
+        </View>
+
+      </SafeAreaView>
 
       {/* Content Area */}
       <ScrollView 
@@ -61,33 +63,40 @@ export default function CutiSukses({ navigation: propNavigation, route }: Props)
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.successContainer}>
-          <View style={styles.iconContainer}>
-            <CheckCircle color="#22C55E" size={80} fill="#22C55E" />
-          </View>
-          
-          <Text style={styles.successTitle}>Pengajuan Cuti Berhasil!</Text>
-          
-          <Text style={styles.successMessage}>
-            Pengajuan cuti akademik Anda telah berhasil dikirim. Tim akan meninjau pengajuan Anda dan akan memberikan konfirmasi melalui email atau notifikasi.
-          </Text>
-
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              onPress={handleBackToCutiAkademik}
-              style={styles.secondaryButton}
-            >
-              <Text style={styles.secondaryButtonText}>Kembali</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              onPress={handleBackToHome}
-              style={styles.primaryButton}
-            >
-              <Text style={styles.primaryButtonText}>Ke Beranda</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Illustration */}
+        <View style={styles.illustrationContainer}>
+          <Image
+            source={require('../../../../assets/images/cuti-proses.png')}
+            style={styles.illustration}
+            resizeMode="contain"
+          />
         </View>
+
+        {/* Title Section */}
+        <View style={styles.titleSection}>
+          <Text style={styles.labelText}>Pengajuan Cuti</Text>
+          <Text style={styles.statusTitle}>Diproses</Text>
+        </View>
+        
+        {/* Message */}
+        <Text style={styles.successMessage}>
+          Kamu akan menerima notifikasi dan email saat pengajuanmu diproses.
+        </Text>
+
+        {/* Info Box */}
+        <View style={styles.infoBox}>
+          <Text style={styles.infoText}>
+            Cek status pengajuan di halaman Riwayat.
+          </Text>
+        </View>
+
+        {/* Button */}
+        <TouchableOpacity
+          onPress={handleBackToHome}
+          style={styles.primaryButton}
+        >
+          <Text style={styles.primaryButtonText}>Kembali ke Beranda</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -98,99 +107,181 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F0F0F0',
   },
-  header: {
-    backgroundColor: '#75ABFF',
-    paddingBottom: 20,
-  },
-  safeAreaHeader: {
+  safeArea: {
     paddingHorizontal: 32,
     paddingTop: 21,
   },
-  headerContent: {
+  headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
     marginTop: 10,
   },
   backButton: {
-    width: 32,
-    height: 32,
+    width: 24,
+    height: 24,
     justifyContent: 'center',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
-  backButtonText: {
+  headerTitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '500',
+    color: '#000000',
+    lineHeight: 24,
+    textAlign: 'center',
+  },
+  stepperContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 30,
+    paddingHorizontal: 32,
+  },
+  stepCircleCompleted: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1E69DD',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepNumberCompleted: {
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
     color: '#FFFFFF',
-    fontSize: 24,
-    fontFamily: 'Poppins-Regular',
+    lineHeight: 21,
+    textAlign: 'center',
   },
-  headerSpacer: {
-    width: 32,
+  stepperDash: {
+    width: 24,
+    height: 1.5,
+    backgroundColor: '#1E69DD',
+  },
+  stepActiveContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#1E69DD',
+    borderRadius: 100,
+    gap: 4,
+  },
+  stepCircleActive: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepNumberActive: {
+    fontSize: 12,
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    color: '#000000',
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  stepLabelActive: {
+    fontSize: 12,
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    color: '#FFFFFF',
+    lineHeight: 18,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 32,
-    paddingTop: 32,
+    paddingTop: 20,
     paddingBottom: 32,
-  },
-  successContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 32,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
   },
-  iconContainer: {
-    marginBottom: 24,
+  illustrationContainer: {
+    width: 393,
+    height: 393,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
-  successTitle: {
-    fontSize: 24,
+  illustration: {
+    width: '100%',
+    height: '100%',
+  },
+  titleSection: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  labelText: {
+    fontSize: 12,
     fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 16,
+    color: '#8D8D8D',
+    lineHeight: 18,
+    textAlign: 'center',
+    marginBottom: 0,
+  },
+  statusTitle: {
+    fontSize: 32,
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    color: '#F58220',
+    lineHeight: 48,
     textAlign: 'center',
   },
   successMessage: {
     fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-    color: '#667085',
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '500',
+    color: '#000000',
+    lineHeight: 21,
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 32,
-  },
-  buttonContainer: {
+    marginBottom: 16,
     width: '100%',
-    gap: 12,
+  },
+  infoBox: {
+    width: '100%',
+    backgroundColor: 'rgba(87, 212, 212, 0.2)',
+    borderLeftWidth: 2,
+    borderLeftColor: '#57D4D4',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    marginBottom: 16,
+  },
+  infoText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '500',
+    color: '#000000',
+    lineHeight: 18,
+    textAlign: 'left',
   },
   primaryButton: {
+    width: '100%',
     backgroundColor: '#1E69DD',
     borderRadius: 16,
-    paddingVertical: 14,
+    paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 4,
   },
   primaryButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
     color: '#FFFFFF',
-    fontFamily: 'Poppins-SemiBold',
-    fontSize: 16,
-  },
-  secondaryButton: {
-    backgroundColor: '#F2F4F7',
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButtonText: {
-    color: '#475467',
-    fontFamily: 'Poppins-SemiBold',
-    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
   },
 });
 

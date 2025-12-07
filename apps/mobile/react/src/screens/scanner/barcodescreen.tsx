@@ -3,6 +3,7 @@ import { View, Text, Image, TouchableOpacity, Dimensions, ScrollView, StyleSheet
 import QRCode from 'react-native-qrcode-svg';
 import { useNavigation } from '@react-navigation/native';
 import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ChevronLeft, ScanLine } from 'lucide-react-native';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -28,42 +29,34 @@ export default function BarcodeScreen() {
       <View style={styles.safeTop} />
 
       {/* Header */}
-      <View style={{ paddingHorizontal: screenWidth * 0.04, paddingVertical: screenHeight * 0.015 }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={{
-              width: screenWidth * 0.1,
-              height: screenWidth * 0.1,
-              backgroundColor: '#FFFFFF',
-              borderRadius: 12,
+              width: 40,
+              height: 40,
               alignItems: 'center',
               justifyContent: 'center',
-              shadowColor: '#000',
-              shadowOpacity: 0.08,
-              shadowRadius: 4,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 2,
             }}
           >
-            <Text style={{ fontSize: screenWidth * 0.05, fontFamily: 'Poppins-Regular' }}>←</Text>
+            <ChevronLeft color="#000000" size={24} />
           </TouchableOpacity>
           <View style={{ flex: 1, alignItems: 'center' }}>
             <Text style={{ color: '#000', fontFamily: 'Poppins-Bold', fontSize: titleFontSize }}>Barcode</Text>
           </View>
-          <View style={{ width: screenWidth * 0.1 }} />
+          <View style={{ width: 40 }} />
         </View>
       </View>
 
-      <View style={{ height: screenHeight * 0.02 }} />
-      <View style={{ height: screenHeight * 0.06 }} />
+      <View style={{ height: 24 }} />
 
       {/* Main Content */}
       <View style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ alignItems: 'center' }}>
-          <View style={{ width: cardWidth, maxHeight: cardHeight, minHeight: screenHeight * 0.4 }}>
+        <ScrollView contentContainerStyle={{ alignItems: 'center', paddingTop: 40 }}>
+          <View style={{ width: cardWidth, maxHeight: cardHeight, minHeight: screenHeight * 0.9 }}>
             <View style={styles.card}>
-              <View style={{ paddingHorizontal: screenWidth * 0.06, paddingVertical: screenHeight * 0.025 }}>
+              <View style={{ paddingHorizontal: screenWidth * 0.09, paddingVertical: screenHeight * 0.025 }}>
                 {/* Profile */}
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Image
@@ -92,7 +85,7 @@ export default function BarcodeScreen() {
 
                 <View style={{ height: screenHeight * 0.02 }} />
 
-                <Text style={{ textAlign: 'center', fontFamily: 'Poppins-Bold', fontSize: Math.max(12, Math.min(fontSize * 0.875, 16)) }}>
+                <Text style={{ textAlign: 'center', fontFamily: 'Poppins-Bold', fontSize: Math.max(12, Math.min(fontSize * 0.875, 12)) }}>
                   Gunakan barcode untuk absen kegiatan.
                 </Text>
               </View>
@@ -102,21 +95,21 @@ export default function BarcodeScreen() {
       </View>
 
       {/* Bottom Bar */}
-      <View style={{ backgroundColor: 'transparent' }}>
+      <View style={{ backgroundColor: 'transparent', marginBottom: 16 }}>
         <View
           style={{
             backgroundColor: '#FFFFFF',
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
             shadowColor: '#000',
-            shadowOpacity: 0.08,
-            shadowRadius: 4,
+            shadowOpacity: 0.3,
+            shadowRadius: 16,
             shadowOffset: { width: 0, height: -2 },
-            elevation: 2,
-            paddingLeft: screenWidth * 0.04,
-            paddingRight: screenWidth * 0.04,
-            paddingTop: screenHeight * 0.025,
-            paddingBottom: screenHeight * 0.04,
+            elevation: 8,
+            paddingLeft: 32,
+            paddingRight: 32,
+            paddingTop: 28,
+            paddingBottom: 16,
           }}
         >
           {/* Info */}
@@ -125,37 +118,39 @@ export default function BarcodeScreen() {
               backgroundColor: '#FFFFFF',
               borderRadius: 12,
               borderWidth: 1,
-              borderColor: '#3A8DFF',
-              paddingVertical: screenHeight * 0.015,
-              paddingHorizontal: screenWidth * 0.02,
+              borderColor: '#2728D1',
+              paddingVertical: 8,
+              paddingHorizontal: 16,
+              marginBottom: 16,
             }}
           >
-            <Text style={{ textAlign: 'center', color: '#000', fontFamily: 'Poppins-Bold', fontSize: Math.max(12, Math.min(fontSize * 0.875, 16)) }}>
+            <Text style={{ textAlign: 'center', color: '#000', fontFamily: 'Poppins-Medium', fontSize: 11.4, lineHeight: 18, fontWeight: '600' }}>
               Tap tombol di bawah untuk mulai scan barcode.
             </Text>
           </View>
 
-          <View style={{ height: screenHeight * 0.02 }} />
-
           {/* Scan Button */}
           <TouchableOpacity
-            activeOpacity={0.85}
+            activeOpacity={0.8}
             onPress={() => navigation.navigate('Scanner')}
             style={{
-              height: screenHeight * 0.07,
-              borderRadius: 16,
+              height: 60,
+              borderRadius: 12,
+              flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
               overflow: 'hidden',
+              backgroundColor: '#1E69DD',
+              shadowColor: '#000',
+              shadowOpacity: 0.25,
+              shadowRadius: 16,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 4,
+              gap: 8,
             }}
           >
-            <View
-              style={{
-                ...StyleSheet.absoluteFillObject,
-                backgroundColor: '#3A8DFF',
-              }}
-            />
-            <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins-Bold', fontSize: Math.max(16, Math.min(titleFontSize, 20)) }}>Scan</Text>
+            <ScanLine color="#FFFFFF" size={24} />
+            <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins-Medium', fontSize: 18, fontWeight: '600', lineHeight: 24 }}>Scan</Text>
           </TouchableOpacity>
         </View>
       </View>

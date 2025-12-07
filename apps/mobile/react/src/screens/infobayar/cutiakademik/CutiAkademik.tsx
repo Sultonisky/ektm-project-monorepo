@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft, History } from 'lucide-react-native';
+import { ChevronLeft, History } from 'lucide-react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../navigation/AppNavigator';
 
@@ -34,7 +34,7 @@ export default function CutiAkademik({ navigation: propNavigation, route }: Prop
 
   const handleHistoryPress = () => {
     // Navigate to history screen
-    console.log('Navigate to history');
+    navigation.navigate('HistoryCuti');
   };
 
   const handleSubmit = () => {
@@ -53,7 +53,7 @@ export default function CutiAkademik({ navigation: propNavigation, route }: Prop
         <SafeAreaView edges={['top']} style={styles.safeAreaHeader}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
-              <ArrowLeft color="#FFFFFF" size={24} />
+              <ChevronLeft color="#FFFFFF" size={24} />
             </TouchableOpacity>
             
             <TouchableOpacity onPress={handleHistoryPress} style={styles.historyButton}>
@@ -103,8 +103,10 @@ export default function CutiAkademik({ navigation: propNavigation, route }: Prop
               </View>
               <Text style={styles.checkboxLabel}>Saya setuju</Text>
             </TouchableOpacity>
+          </ScrollView>
 
-            {/* Submit Button */}
+          {/* Fixed Submit Button */}
+          <SafeAreaView edges={['bottom']} style={styles.buttonContainer}>
             <TouchableOpacity
               style={[styles.submitButton, !isAgreed && styles.submitButtonDisabled]}
               onPress={handleSubmit}
@@ -113,7 +115,7 @@ export default function CutiAkademik({ navigation: propNavigation, route }: Prop
             >
               <Text style={styles.submitButtonText}>Ajukan Cuti</Text>
             </TouchableOpacity>
-          </ScrollView>
+          </SafeAreaView>
         </View>
       </View>
     </View>
@@ -187,7 +189,15 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 32,
     paddingTop: 32,
-    paddingBottom: 32,
+    paddingBottom: 16,
+  },
+  buttonContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 32,
+    paddingTop: 16,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
   },
   sectionTitle: {
     fontSize: 12,
